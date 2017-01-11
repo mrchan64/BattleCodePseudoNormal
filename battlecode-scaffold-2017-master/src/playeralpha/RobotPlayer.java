@@ -1,4 +1,5 @@
 package playeralpha;
+
 import battlecode.common.*;
 
 public class RobotPlayer {
@@ -43,7 +44,16 @@ public class RobotPlayer {
 
 		float dir = (float)Math.PI;
 		Direction treeDir = new Direction(dir);
-		System.out.println(GameConstants.BULLET_EXCHANGE_RATE);
+		java.lang.reflect.Field[] fields = GameConstants.class.getDeclaredFields();
+		GameConstants gc = null;
+		for(int i = 0; i<fields.length; i++){
+			System.out.print(fields[i].getName()+" = ");
+			try{
+				System.out.println(fields[i].get(gc));
+			}catch(Exception e){
+				System.out.println("unable to access value");
+			}
+		}
 		while(true){
 			try{
 				if(rc.canPlantTree(treeDir)){
