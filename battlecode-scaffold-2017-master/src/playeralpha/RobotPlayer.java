@@ -15,6 +15,9 @@ public class RobotPlayer {
         case GARDENER:
         	runGardener();
         	break;
+        case SCOUT:
+        	Scout scout = new Scout(rc);
+        	scout.go();
 		}
 	}
 	
@@ -43,29 +46,24 @@ public class RobotPlayer {
 	public static void runGardener(){
 
 		float dir = (float)Math.PI;
-		Direction treeDir = new Direction(dir);
-		java.lang.reflect.Field[] fields = GameConstants.class.getDeclaredFields();
-		GameConstants gc = null;
-		for(int i = 0; i<fields.length; i++){
-			System.out.print(fields[i].getName()+" = ");
-			try{
-				System.out.println(fields[i].get(gc));
-			}catch(Exception e){
-				System.out.println("unable to access value");
-			}
-		}
+		Direction treeDir = new Direction(0);
+		Direction scoutDir = new Direction(dir);
 		while(true){
 			try{
 				if(rc.canPlantTree(treeDir)){
 					System.out.println("Planting Tree");
 					rc.plantTree(treeDir);
 				}
+				if(rc.canBuildRobot(RobotType.SCOUT, scoutDir)){
+					System.out.println("Building Scout");
+					rc.buildRobot(RobotType.SCOUT, scoutDir);
+				}
 				TreeInfo[] trees = rc.senseNearbyTrees();
 				for(int i = 0; i<trees.length; i++){
-					/*if(rc.canWater()){
+					if(rc.canWater()){
 						System.out.println("Watering Tree");
 						rc.water(trees[i].ID);
-					}*/
+					}
 				}
 				System.out.println(rc.getTeamBullets());
 				Clock.yield();

@@ -6,20 +6,53 @@ public class Scout {
 	RobotController rc;
 	RobotType type = RobotType.SCOUT;
 	final float berth = .06141592654F;
+	float stride, body;
 	MapLocation enemylocation;
 	MapLocation here;
+	Direction shooting;
 	
-	public static void main(String[] args){
-		hypotenuse(3,4);
+	public Scout(RobotController rc){
+		this.rc = rc;
+		enemylocation = new MapLocation(22, 520);
+		stride = type.strideRadius;
+		body = type.bodyRadius;
+	}
+	
+	public void go(){
+		while(true){
+			turn();
+		}
 	}
 	
 	public void turn(){
-		here = rc.getLocation();
+		try{
+			here = rc.getLocation();
+			shooting = new Direction((float) (Math.PI / 6 * 5));
+			moveTowards(enemylocation);
+			if(rc.canFireSingleShot()){
+				rc.fireSingleShot(shooting);
+			}
+			Clock.yield();
+		}catch(Exception e){
+			System.out.println("Turn could not happen");
+			e.printStackTrace();
+		}
 	}
 	
 	public void moveTowards(MapLocation target){
 		Direction general = here.directionTo(target);
-		Slice[] avoid = evadeBullets();
+		Slice[] avoid = combine(evadeBullets(), evadeObstacles());
+		for(int i = 0; i<avoid.length; i++){
+			for(int j = i+1; j<avoid.length; j++){
+				if(avoid[i].add(avoid[j])){
+					avoid = remove(avoid, j);
+					j = i+1;
+				}
+			}
+		}
+		if(avoid.length>0 && avoid[0].complete){
+			return;
+		}
 		for(int i = 0; i<avoid.length; i++){
 			if(avoid[i].contains(general)){
 				if(Math.abs(avoid[i].open.radiansBetween(general))<Math.abs(avoid[i].close.radiansBetween(general))){
@@ -29,19 +62,103 @@ public class Scout {
 				}
 			}
 		}
+		try{
+			if(rc.canMove(general)){
+				rc.move(general);
+			}
+		}catch(Exception e){
+			System.out.println("Tried to move");
+		}
+	}
+	
+	public Slice[] combine(Slice[] a, Slice[] b){
+		Slice[] ret = new Slice[a.length+b.length];
+		for(int i = 0; i<a.length; i++){
+			ret[i] = a[i];
+		}
+		int mark = a.length;
+		for(int i = 0; i<b.length; i++){
+			ret[mark+i] = b[i];
+		}
+		return ret;
 	}
 	
 	public Slice[] evadeObstacles(){
 		RobotInfo[] ri = rc.senseNearbyRobots();
+		Slice[] unavailable = null;
+		int targThreat = 0;
+		for(int i = 0; i<ri.length; i++){
+			if(ri[i].team != rc.getTeam()){
+				switch(ri[i].getType()){
+				case TANK:
+					if(targThreat<1){
+						targThreat = 1;
+						shooting = here.directionTo(ri[i].location);
+					}
+				case LUMBERJACK:
+					if(targThreat<2){
+						targThreat = 2;
+						shooting = here.directionTo(ri[i].location);
+					}
+				case SOLDIER:
+					if(targThreat<3){
+						targThreat = 3;
+						shooting = here.directionTo(ri[i].location);
+					}
+				case SCOUT:
+					if(targThreat<4){
+						targThreat = 4;
+						shooting = here.directionTo(ri[i].location);
+					}
+				case GARDENER:
+					if(targThreat<5){
+						targThreat = 5;
+						shooting = here.directionTo(ri[i].location);
+						enemylocation = ri[i].location;
+					}
+				case ARCHON:
+					if(targThreat<6){
+						targThreat = 6;
+						shooting = here.directionTo(ri[i].location);
+						enemylocation = ri[i].location;
+					}
+				}
+			}
+			if(here.distanceTo(ri[i].location) > ri[i].getRadius()){
+				continue;
+			}
+			float half = (float) Math.asin(ri[i].getRadius()/here.distanceTo(ri[i].location));
+			float middle = here.directionTo(ri[i].location).radians;
+			Slice cone = new Slice(new Direction(middle+half), new Direction(middle-half));
+			if(unavailable == null){
+				unavailable = new Slice[1];
+				unavailable[0] = cone;
+			}else{
+				Slice[] newSet = new Slice[unavailable.length+1];
+				for(int j = 0; j<unavailable.length; i++){
+					newSet[j+1] = unavailable[j];
+				}
+				newSet[0] = cone;
+				unavailable = newSet;
+			}
+		}
+		if(unavailable == null)unavailable = new Slice[0];
+		
+		for(int i = 0; i<unavailable.length; i++){
+			for(int j = i+1; j<unavailable.length; j++){
+				if(unavailable[i].add(unavailable[j])){
+					unavailable = remove(unavailable, j);
+					j = i+1;
+				}
+			}
+		}
+		return unavailable;
 	}
 	
 	public Slice[] evadeBullets(){
 		Slice[] unavailable = null;
 		
 		BulletInfo[] bi = rc.senseNearbyBullets();
-		
-		float stride = type.strideRadius;
-		float body = type.bodyRadius;
 		
 		MapLocation origin = new MapLocation(0,0);
 		MapLocation point = new MapLocation(stride,body);
@@ -60,6 +177,9 @@ public class Scout {
 			
 			MapLocation altitudeIntersect = bulletPath.intersect(altitude);
 			float altitudeLength = here.distanceTo(altitudeIntersect);
+			if(altitudeLength == 0){
+				continue;
+			}
 			if(altitudeLength > stride + body){
 				continue;
 			}
@@ -68,7 +188,9 @@ public class Scout {
 			float theta1, theta2;
 			
 			if(here.distanceTo(endpoint1) > oa){
-				if(altitudeAngle.radiansBetween(here.directionTo(endpoint1))>0){
+				if(altitudeAngle
+						.radiansBetween(here
+								.directionTo(endpoint1))>0){
 					theta1 = altitudeAngle.radians + (float) Math.acos((double)altitudeLength/oa);
 				}else{
 					theta1 = altitudeAngle.radians - (float) Math.acos((double)altitudeLength/oa);
@@ -114,11 +236,12 @@ public class Scout {
 				Slice[] newSet = new Slice[unavailable.length+1];
 				for(int j = 0; j<unavailable.length; j++){
 					newSet[j+1] = unavailable[j];
-					newSet[0] = new Slice(open, close);
 				}
+				newSet[0] = new Slice(open, close);
 				unavailable = newSet;
 			}
 		}
+		if(unavailable == null)unavailable = new Slice[0];
 		
 		for(int i = 0; i<unavailable.length; i++){
 			for(int j = i+1; j<unavailable.length; j++){
@@ -203,7 +326,7 @@ public class Scout {
 					success = true;
 				}else{
 					Slice other = new Slice(o,c);
-					if(other.add(this)){
+					if(other.contains(open) && other.contains(close)){
 						success = true;
 						open = other.open;
 						close = other.close;
