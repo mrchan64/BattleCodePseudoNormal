@@ -23,19 +23,23 @@ public class RobotPlayer {
 	
 	public static void runArchon() throws GameActionException{
 		float dir = (float)Math.PI*.5F;
+		float dir2 = (float)(-1*Math.PI*.5F);
+		float dir3 = 0;
 		Direction gardDir = new Direction(dir);
-		try{
-			if(rc.canBuildRobot(RobotType.GARDENER, gardDir)){
-				System.out.println("Building Gardener");
-				rc.buildRobot(RobotType.GARDENER, gardDir);
-			}
-			Clock.yield();
-		}catch(Exception e){
-			e.printStackTrace();
-		}
+		Direction gardDir2 = new Direction(dir2);
+		Direction gardDir3 = new Direction(dir3);
 		while(true){
 			try{
-				
+				if(rc.canBuildRobot(RobotType.GARDENER, gardDir)){
+					System.out.println("Building Gardener dir 1");
+					rc.buildRobot(RobotType.GARDENER, gardDir);
+				}else if(rc.canBuildRobot(RobotType.GARDENER, gardDir2)){
+					System.out.println("Building Gardener dir 2");
+					rc.buildRobot(RobotType.GARDENER, gardDir2);
+				}else if(rc.canBuildRobot(RobotType.GARDENER, gardDir3)){
+					System.out.println("Building Gardener dir 3");
+					rc.buildRobot(RobotType.GARDENER, gardDir3);
+				}
 				Clock.yield();
 			}catch(Exception e){
 				e.printStackTrace();
@@ -45,27 +49,36 @@ public class RobotPlayer {
 	
 	public static void runGardener(){
 
-		float dir = (float)Math.PI;
-		Direction treeDir = new Direction(0);
-		Direction scoutDir = new Direction(dir);
+		float dir = (float)Math.PI*.5F;
+		float dir2 = (float)(-1*Math.PI*.5F);
+		float dir3 = 0;
+		float dir4 = (float)Math.PI;
+		Direction treeDir = new Direction(dir);
+		Direction treeDir2 = new Direction(dir2);
+		Direction treeDir3 = new Direction(dir3);
+		Direction scoutDir = new Direction(dir4);
 		while(true){
 			try{
 				if(rc.canPlantTree(treeDir)){
-					System.out.println("Planting Tree");
 					rc.plantTree(treeDir);
+				}else if(rc.canPlantTree(treeDir2)){
+					rc.plantTree(treeDir2);
+				}else if(rc.canPlantTree(treeDir3)){
+					rc.plantTree(treeDir3);
+					
 				}
-				if(rc.canBuildRobot(RobotType.SCOUT, scoutDir)){
+				if(rc.getRoundNum()>200 && rc.canBuildRobot(RobotType.SCOUT, scoutDir)){
 					System.out.println("Building Scout");
 					rc.buildRobot(RobotType.SCOUT, scoutDir);
 				}
 				TreeInfo[] trees = rc.senseNearbyTrees();
 				for(int i = 0; i<trees.length; i++){
-					if(rc.canWater()){
-						System.out.println("Watering Tree");
-						rc.water(trees[i].ID);
+					if(trees[i].maxHealth-trees[i].health >= GameConstants.WATER_HEALTH_REGEN_RATE){
+						if(rc.canWater(trees[i].ID)){
+							rc.water(trees[i].ID);
+						}
 					}
 				}
-				System.out.println(rc.getTeamBullets());
 				Clock.yield();
 			}catch(Exception e){
 				e.printStackTrace();
