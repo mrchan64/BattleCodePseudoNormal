@@ -30,6 +30,13 @@ public class RobotPlayer {
 		Direction gardDir3 = new Direction(dir3);
 		while(true){
 			try{
+				boolean isHead = BroadcastSystem.checkHead(rc);
+				if(isHead){
+					if(!BroadcastSystem.readSensed(rc)){
+						BroadcastSystem.setScoutFormation(rc);
+					}
+					BroadcastSystem.resetSensed(rc);
+				}
 				if(rc.canBuildRobot(RobotType.GARDENER, gardDir)){
 					System.out.println("Building Gardener dir 1");
 					rc.buildRobot(RobotType.GARDENER, gardDir);

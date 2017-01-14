@@ -14,8 +14,11 @@ public class Scout {
 	MapLocation here;
 	Direction shooting;
 	Direction general;
+	int generalThreat;
+	int generalID;
 	RobotInfo[] ri;
 	Slice[] allies;
+	boolean uploadEnemy;
 	
 	public Scout(RobotController rc){
 		this.rc = rc;
@@ -32,20 +35,39 @@ public class Scout {
 	
 	public void turn(){
 		try{
+			if(BroadcastSystem.checkScoutFormation(rc)){
+				generalScouting();
+			}else{
+				int[] el = BroadcastSystem.readEnemyLocation(rc);
+				enemylocation = new MapLocation(el[0],el[1]);
+				generalThreat = el[2];
+				generalID = el[3];
+			}
 			here = rc.getLocation();
 			ri = rc.senseNearbyRobots();
 			general = here.directionTo(enemylocation);
 			shooting = null;
+			uploadEnemy = false;
 			if(!efficient)allies = detectAllies();
 			moveTowards(enemylocation);
+			if(uploadEnemy){
+				BroadcastSystem.sendEnemyLocation(rc, enemylocation, generalThreat, generalID);
+			}
 			if(shooting != null && rc.canFireSingleShot()){
 				rc.fireSingleShot(shooting);
 			}
 			Clock.yield();
 		}catch(Exception e){
-			System.out.println("Turn could not happen");
+			System.out.println("[ERROR] Turn could not happen");
 			e.printStackTrace();
 		}
+	}
+	
+	public void generalScouting(){
+		generalThreat = 0;
+		//enemylocation = new MapLocation(900, 500);
+		enemylocation = new MapLocation(25, 500);
+		//set general direction
 	}
 	
 	public void moveTowards(MapLocation target){
@@ -76,11 +98,14 @@ public class Scout {
 			}
 		}
 		try{
+			System.out.println("General "+general);
 			if(rc.canMove(general)){
 				rc.move(general);
+			}else{
+				System.out.println("cant move there");
 			}
 		}catch(Exception e){
-			System.out.println("Tried to move");
+			System.out.println("[ERROR] Tried to move");
 		}
 	}
 	
@@ -127,8 +152,6 @@ public class Scout {
 			}
 		}
 		if(unavailable == null)unavailable = new Slice[0];
-		
-		System.out.println(unavailable.length);
 		
 		for(int i = 0; i<unavailable.length; i++){
 			for(int j = i+1; j<unavailable.length; j++){
@@ -191,13 +214,19 @@ public class Scout {
 							enemylocation = ri[i].location;
 						}
 					}
-					newGeneral(ri[i]);
+					if(targThreat>generalThreat){
+						newGeneral(ri[i]);
+						enemylocation = ri[i].location;
+						generalID = ri[i].ID;
+						generalThreat = targThreat;
+						uploadEnemy = true;
+					}
 				}
 			}
-			if(here.distanceTo(ri[i].location) > ri[i].getRadius()/*+type.strideRadius*/){
+			if(here.distanceTo(ri[i].location) > ri[i].getRadius()+type.strideRadius){
 				continue;
 			}
-			float half = (float) Math.asin(ri[i].getRadius()/here.distanceTo(ri[i].location));
+			float half = (float) Math.asin((ri[i].getRadius()+type.bodyRadius)/here.distanceTo(ri[i].location));
 			float middle = here.directionTo(ri[i].location).radians;
 			Slice cone = new Slice(new Direction(middle+half), new Direction(middle-half));
 			if(unavailable == null){
@@ -205,7 +234,7 @@ public class Scout {
 				unavailable[0] = cone;
 			}else{
 				Slice[] newSet = new Slice[unavailable.length+1];
-				for(int j = 0; j<unavailable.length; i++){
+				for(int j = 0; j<unavailable.length; j++){
 					newSet[j+1] = unavailable[j];
 				}
 				newSet[0] = cone;
@@ -213,8 +242,6 @@ public class Scout {
 			}
 		}
 		if(unavailable == null)unavailable = new Slice[0];
-		
-		System.out.println(unavailable.length);
 		
 		for(int i = 0; i<unavailable.length; i++){
 			for(int j = i+1; j<unavailable.length; j++){
@@ -263,31 +290,31 @@ public class Scout {
 				if(altitudeAngle
 						.radiansBetween(here
 								.directionTo(endpoint1))>0){
-					theta1 = altitudeAngle.radians + (float) Math.acos((double)altitudeLength/oa);
+					theta1 = altitudeAngle.radians + acos(altitudeLength, oa);
 				}else{
-					theta1 = altitudeAngle.radians - (float) Math.acos((double)altitudeLength/oa);
+					theta1 = altitudeAngle.radians - acos(altitudeLength, oa);
 				}
 			}else{
 				float hypotenuse = here.distanceTo(endpoint1);
 				if(altitudeAngle.radiansBetween(here.directionTo(endpoint1))>0){
-					theta1 = altitudeAngle.radians + (float) Math.acos((double)altitudeLength/hypotenuse);
+					theta1 = altitudeAngle.radians + acos(altitudeLength, hypotenuse);
 				}else{
-					theta1 = altitudeAngle.radians - (float) Math.acos((double)altitudeLength/hypotenuse);
+					theta1 = altitudeAngle.radians - acos(altitudeLength, hypotenuse);
 				}
 			}
 			
 			if(here.distanceTo(endpoint2) > oa){
 				if(altitudeAngle.radiansBetween(here.directionTo(endpoint2))>0){
-					theta2 = altitudeAngle.radians + (float) Math.acos((double)altitudeLength/oa);
+					theta2 = altitudeAngle.radians + acos(altitudeLength, oa);
 				}else{
-					theta2 = altitudeAngle.radians - (float) Math.acos((double)altitudeLength/oa);
+					theta2 = altitudeAngle.radians - acos(altitudeLength, oa);
 				}
 			}else{
 				float hypotenuse = here.distanceTo(endpoint2);
 				if(altitudeAngle.radiansBetween(here.directionTo(endpoint2))>0){
-					theta2 = altitudeAngle.radians + (float) Math.acos((double)altitudeLength/hypotenuse);
+					theta2 = altitudeAngle.radians + acos(altitudeLength, hypotenuse);
 				}else{
-					theta2 = altitudeAngle.radians - (float) Math.acos((double)altitudeLength/hypotenuse);
+					theta2 = altitudeAngle.radians - acos(altitudeLength, hypotenuse);
 				}
 			}
 			
@@ -336,7 +363,6 @@ public class Scout {
 		MapLocation point = new MapLocation(stride,body);
 		
 		float beta = origin.directionTo(point).radians+berth;
-		float oa = origin.distanceTo(point);
 		
 		for(int i = 0; i<bi.length; i++){
 			MapLocation endpoint1 = bi[i].getLocation();
@@ -412,6 +438,18 @@ public class Scout {
 		MapLocation point = new MapLocation(a,b);
 		System.out.println(origin.distanceTo(point));
 		System.out.println(origin.directionTo(point).radians);
+	}
+	
+	public float acos(float adjacent, float hypotenuse){
+		float opposite = (float)Math.sqrt(hypotenuse*hypotenuse - adjacent*adjacent);
+		Direction alpha = new MapLocation(0, 0).directionTo(new MapLocation(adjacent, opposite));
+		return alpha.radians;
+	}
+	
+	public float asin(float opposite, float hypotenuse){
+		float adjacent = (float)Math.sqrt(hypotenuse*hypotenuse - opposite*opposite);
+		Direction alpha = new MapLocation(0, 0).directionTo(new MapLocation(adjacent, opposite));
+		return alpha.radians;
 	}
 	
 	public class Line{
