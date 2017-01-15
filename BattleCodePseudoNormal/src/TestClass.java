@@ -1,12 +1,13 @@
+import java.util.Arrays;
+
 
 public class TestClass {
 
 	public static void main(String[] args) {
-		String[] test = new String[4];
-		System.out.println(test.length);
-		test = (String[]) remove(test, 2);
-		System.out.println(test.length);
-		System.out.println(test instanceof String[]);
+		int n = 65;
+		String x = new String("");
+		char c = (char) n;
+		System.out.println(c);
 	}
 	
 	public static void remove(int[] arg){

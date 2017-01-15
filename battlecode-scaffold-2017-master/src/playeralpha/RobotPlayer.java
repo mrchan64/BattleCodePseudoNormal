@@ -28,6 +28,7 @@ public class RobotPlayer {
 		Direction gardDir = new Direction(dir);
 		Direction gardDir2 = new Direction(dir2);
 		Direction gardDir3 = new Direction(dir3);
+		BroadcastSystem.setScoutFormation(rc);
 		while(true){
 			try{
 				boolean isHead = BroadcastSystem.checkHead(rc);
@@ -35,6 +36,7 @@ public class RobotPlayer {
 					if(!BroadcastSystem.readSensed(rc)){
 						BroadcastSystem.setScoutFormation(rc);
 					}
+					BroadcastSystem.resetScoutsCode(rc);
 					BroadcastSystem.resetSensed(rc);
 				}
 				if(rc.canBuildRobot(RobotType.GARDENER, gardDir)){

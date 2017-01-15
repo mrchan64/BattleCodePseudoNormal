@@ -9,6 +9,9 @@ public class Scout {
 	RobotType type = RobotType.SCOUT;
 	final float berth = .06141592654F;
 	final float kiteMultiplier = .8F;
+	int scoutingTurns = 0;
+	boolean cantMove = false;
+	float scoutingDir;
 	float stride, body;
 	MapLocation enemylocation;
 	MapLocation here;
@@ -35,15 +38,17 @@ public class Scout {
 	
 	public void turn(){
 		try{
-			if(BroadcastSystem.checkScoutFormation(rc)){
+			here = rc.getLocation();
+			scoutingDir = BroadcastSystem.scoutingMission(rc);
+			if(scoutingDir>-1){
 				generalScouting();
 			}else{
+				scoutingTurns = 0;
 				int[] el = BroadcastSystem.readEnemyLocation(rc);
 				enemylocation = new MapLocation(el[0],el[1]);
 				generalThreat = el[2];
 				generalID = el[3];
 			}
-			here = rc.getLocation();
 			ri = rc.senseNearbyRobots();
 			general = here.directionTo(enemylocation);
 			shooting = null;
@@ -52,6 +57,10 @@ public class Scout {
 			moveTowards(enemylocation);
 			if(uploadEnemy){
 				BroadcastSystem.sendEnemyLocation(rc, enemylocation, generalThreat, generalID);
+			}else{
+				if(here.distanceTo(enemylocation)<=type.strideRadius){
+					BroadcastSystem.sendInRange(rc);
+				}
 			}
 			if(shooting != null && rc.canFireSingleShot()){
 				rc.fireSingleShot(shooting);
@@ -65,9 +74,15 @@ public class Scout {
 	
 	public void generalScouting(){
 		generalThreat = 0;
-		//enemylocation = new MapLocation(900, 500);
-		enemylocation = new MapLocation(25, 500);
-		//set general direction
+		
+		if(cantMove){
+			cantMove = false;
+			scoutingTurns++;
+		}
+		
+		if(scoutingDir>0){
+			enemylocation = here.add(scoutingDir + (float)Math.PI / 3 * 2 * scoutingTurns, GameConstants.MAP_MAX_HEIGHT * 2);
+		}
 	}
 	
 	public void moveTowards(MapLocation target){
@@ -98,11 +113,10 @@ public class Scout {
 			}
 		}
 		try{
-			System.out.println("General "+general);
 			if(rc.canMove(general)){
 				rc.move(general);
 			}else{
-				System.out.println("cant move there");
+				cantMove = true;
 			}
 		}catch(Exception e){
 			System.out.println("[ERROR] Tried to move");
