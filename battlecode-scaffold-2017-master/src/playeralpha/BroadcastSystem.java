@@ -15,6 +15,18 @@ public class BroadcastSystem {
 	public static final int HEAD_SWITCHER = 7;
 	public static final int SCOUTS_CODE = 8;
 	public static final int SCOUTS_TOTAL = 9;
+	public static final int GARDENER_DEST_X = 10;
+	public static final int GARDENER_DEST_Y = 11;
+	public static final int GARDENER_DEST_DISTANCE = 12;
+	public static final int GARDENER_ALIGN_ID = 13;
+	public static final int RELATIVE_SAFETY_X = 14;
+	public static final int RELATIVE_SAFETY_Y = 15;
+	public static final int INVALID_LOCATION_X = 16;
+	public static final int INVALID_LOCATION_Y = 17;
+	public static final int INVALID_LOCATION_SET = 18;
+	public static final int GARDENER_MIGRATING = 19;
+	public static final int MIGRATED_FARMERS = 20;
+	public static final int ON_HOLD_FARMERS = 21;
 	
 	public static int previousHead = 1;
 	public static int scoutNum = -1;
@@ -67,7 +79,6 @@ public class BroadcastSystem {
 	public static void resetScoutsCode(RobotController rc){
 		try{
 			int n = rc.readBroadcast(SCOUTS_CODE);
-			System.out.println("Total" +n);
 			rc.broadcast(SCOUTS_TOTAL, n);
 			rc.broadcast(SCOUTS_CODE, 0);
 		}catch(Exception e){
@@ -153,5 +164,134 @@ public class BroadcastSystem {
 			System.out.println("[ERROR] Scouting Mission Transaction Failed");
 		}
 		return -1;
+	}
+	
+	public static MapLocation getInvalidLocation(RobotController rc){
+		try{
+			if(rc.readBroadcast(INVALID_LOCATION_SET) == 1){
+				return new MapLocation(((float)rc.readBroadcast(INVALID_LOCATION_X))/2, ((float)rc.readBroadcast(INVALID_LOCATION_Y))/2);
+			}
+		}catch(Exception e){
+			System.out.println("[ERROR] Get Invalid Dest Failed");
+		}
+		return null;
+	}
+	
+	public static void setInvalidLocation(RobotController rc, MapLocation loc){
+		try{
+			rc.broadcast(INVALID_LOCATION_X, (int) (loc.x*2));
+			rc.broadcast(INVALID_LOCATION_Y, (int) (loc.y*2));
+			rc.broadcast(INVALID_LOCATION_SET, 1);
+		}catch(Exception e){
+			System.out.println("[ERROR] Set Invalid Dest Failed");
+		}
+	}
+	
+	public static MapLocation getGardenerDest(RobotController rc){
+		try{
+			if(rc.readBroadcast(GARDENER_DEST_DISTANCE)==Integer.MAX_VALUE){
+				return null;
+			}
+			return new MapLocation(((float)rc.readBroadcast(GARDENER_DEST_X))/2,((float)rc.readBroadcast(GARDENER_DEST_Y))/2);
+		}catch(Exception e){
+			System.out.println("[ERROR] Get Gardener Destination Failed");
+		}
+		return null;
+	}
+	
+	public static void setGardenerDest(RobotController rc, MapLocation loc, float distance){
+		try{
+			if(distance*2 < rc.readBroadcast(GARDENER_DEST_DISTANCE)){
+				rc.broadcast(GARDENER_DEST_X, (int) (loc.x*2)); 
+				rc.broadcast(GARDENER_DEST_Y, (int) (loc.y*2)); 
+				rc.broadcast(GARDENER_DEST_DISTANCE, (int)(distance*2)); 
+				rc.broadcast(GARDENER_ALIGN_ID, rc.getID());
+			}
+		}catch(Exception e){
+			System.out.println("[ERROR] Set Gardener Destination Failed");
+		}
+	}
+	
+	public static int getAlignID(RobotController rc){
+		try{
+			return rc.readBroadcast(GARDENER_ALIGN_ID);
+		}catch(Exception e){
+			System.out.println("[ERROR] Get Gardener Destination Failed");
+		}
+		return 0;
+	}
+	
+	public static void resetGardenerDest(RobotController rc){
+		try{ 
+			rc.broadcast(GARDENER_DEST_DISTANCE, Integer.MAX_VALUE); 
+			rc.broadcast(GARDENER_MIGRATING, 0);
+		}catch(Exception e){
+			System.out.println("[ERROR] Reset Gardener Destination Failed");
+		}
+	}
+	
+	public static MapLocation getRelativeSafety(RobotController rc){
+		try{
+			return new MapLocation(rc.readBroadcast(RELATIVE_SAFETY_X),rc.readBroadcast(RELATIVE_SAFETY_Y));
+		}catch(Exception e){
+			System.out.println("[ERROR] Get Relative Safety Failed");
+		}
+		return null;
+	}
+	
+	public static void setRelativeSafety(RobotController rc, MapLocation loc){
+		try{
+			rc.broadcast(RELATIVE_SAFETY_X, (int) loc.x);
+			rc.broadcast(RELATIVE_SAFETY_Y, (int) loc.y);
+		}catch(Exception e){
+			System.out.println("[ERROR] Set Relative Safety Failed");
+		}
+	}
+	
+	public static boolean amMigrating(RobotController rc){
+		try{
+			if(rc.readBroadcast(GARDENER_MIGRATING)==0){
+				rc.broadcast(GARDENER_MIGRATING, 1);
+				return true;
+			}
+		}catch(Exception e){
+			System.out.println("[ERROR] Migration Activation Failed");
+		}
+		return false;
+	}
+	
+	public static int checkNumFarmers(RobotController rc, boolean migrated){
+		try{
+			int count = rc.readBroadcast(MIGRATED_FARMERS);
+			if(migrated){
+				rc.broadcast(MIGRATED_FARMERS, count+1);
+			}else{
+				int num = rc.readBroadcast(ON_HOLD_FARMERS);
+				rc.broadcast(ON_HOLD_FARMERS, num+1);
+			}
+			return count;
+		}catch(Exception e){
+			System.out.println("[ERROR] Farmer Count Failed");
+		}
+		return -1;
+	}
+	
+	public static void resetNumFarmers(RobotController rc){
+		try{
+			rc.broadcast(MIGRATED_FARMERS, 0);
+			rc.broadcast(ON_HOLD_FARMERS, 0);
+		}catch(Exception e){
+			System.out.println("[ERROR] Farmer Count Reset Failed");
+		}
+	}
+	
+	public static int[] checkFarmers(RobotController rc){
+		try{
+			int[] ret = {rc.readBroadcast(MIGRATED_FARMERS), rc.readBroadcast(ON_HOLD_FARMERS)};
+			return ret;
+		}catch(Exception e){
+			System.out.println("[ERROR] Farmer Check Failed");
+		}
+		return new int[]{0,0};
 	}
 }

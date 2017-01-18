@@ -4,10 +4,9 @@ import java.util.Arrays;
 public class TestClass {
 
 	public static void main(String[] args) {
-		int n = 65;
-		String x = new String("");
-		char c = (char) n;
-		System.out.println(c);
+		int i = 1;
+		int j = 3;
+		System.out.println(i/j);
 	}
 	
 	public static void remove(int[] arg){

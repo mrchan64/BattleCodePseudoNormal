@@ -54,11 +54,11 @@ public class Scout {
 			shooting = null;
 			uploadEnemy = false;
 			if(!efficient)allies = detectAllies();
-			moveTowards(enemylocation);
+			moveTowards();
 			if(uploadEnemy){
 				BroadcastSystem.sendEnemyLocation(rc, enemylocation, generalThreat, generalID);
 			}else{
-				if(here.distanceTo(enemylocation)<=type.strideRadius){
+				if(here.distanceTo(enemylocation)<=stride){
 					BroadcastSystem.sendInRange(rc);
 				}
 			}
@@ -85,12 +85,12 @@ public class Scout {
 		}
 	}
 	
-	public void moveTowards(MapLocation target){
+	public void moveTowards(){
 		Slice[] avoid;
 		if(efficient){
-			avoid = combine(evadeBullets_efficient(), evadeObstacles());
+			avoid = Slice.combine(evadeBullets_efficient(), evadeObstacles());
 		}else{
-			avoid = combine(evadeBullets(), evadeObstacles());
+			avoid = Slice.combine(evadeBullets(), evadeObstacles());
 		}
 		for(int i = 0; i<avoid.length; i++){
 			for(int j = i+1; j<avoid.length; j++){
@@ -110,6 +110,7 @@ public class Scout {
 				}else{
 					general = avoid[i].close;
 				}
+				break;
 			}
 		}
 		try{
@@ -123,20 +124,8 @@ public class Scout {
 		}
 	}
 	
-	public Slice[] combine(Slice[] a, Slice[] b){
-		Slice[] ret = new Slice[a.length+b.length];
-		for(int i = 0; i<a.length; i++){
-			ret[i] = a[i];
-		}
-		int mark = a.length;
-		for(int i = 0; i<b.length; i++){
-			ret[mark+i] = b[i];
-		}
-		return ret;
-	}
-	
 	public void newGeneral(RobotInfo ri){
-		float a = type.strideRadius;
+		float a = stride;
 		float b = ri.getType().strideRadius;
 		float c = here.distanceTo(ri.location);
 		float d = (float)Math.sqrt((a*a+b*b-c*c)/2);
@@ -237,10 +226,10 @@ public class Scout {
 					}
 				}
 			}
-			if(here.distanceTo(ri[i].location) > ri[i].getRadius()+type.strideRadius){
+			if(here.distanceTo(ri[i].location) > ri[i].getRadius()+stride+body){
 				continue;
 			}
-			float half = (float) Math.asin((ri[i].getRadius()+type.bodyRadius)/here.distanceTo(ri[i].location));
+			float half = (float) Math.asin((ri[i].getRadius()+body)/here.distanceTo(ri[i].location));
 			float middle = here.directionTo(ri[i].location).radians;
 			Slice cone = new Slice(new Direction(middle+half), new Direction(middle-half));
 			if(unavailable == null){
@@ -261,7 +250,7 @@ public class Scout {
 			for(int j = i+1; j<unavailable.length; j++){
 				if(unavailable[i].add(unavailable[j])){
 					unavailable = remove(unavailable, j);
-					j = i+1;
+					j = i;
 				}
 			}
 		}
@@ -360,7 +349,7 @@ public class Scout {
 			for(int j = i+1; j<unavailable.length; j++){
 				if(unavailable[i].add(unavailable[j])){
 					unavailable = remove(unavailable, j);
-					j = i+1;
+					j = i;
 				}
 			}
 		}
@@ -427,7 +416,7 @@ public class Scout {
 			for(int j = i+1; j<unavailable.length; j++){
 				if(unavailable[i].add(unavailable[j])){
 					unavailable = remove(unavailable, j);
-					j = i+1;
+					j = i;
 				}
 			}
 		}
@@ -465,113 +454,4 @@ public class Scout {
 		Direction alpha = new MapLocation(0, 0).directionTo(new MapLocation(adjacent, opposite));
 		return alpha.radians;
 	}
-	
-	public class Line{
-		
-		public float x;
-		public float y;
-		public float m;
-		
-		public Line(MapLocation point, Direction slope){
-			x=point.x;
-			y=point.y;
-			m=(float) Math.tan(slope.radians);
-		}
-		
-		public MapLocation intersect(Line line2){
-			float pointX = (line2.m * line2.x - m * x + y - line2.y)/(line2.m - m);
-			float pointY = m * (pointX - x) + y;
-			return new MapLocation(pointX, pointY);
-		}
-	}
-	
-	public class Slice{
-		
-		public Direction open;
-		public Direction close;
-		public boolean concave = false;
-		public boolean complete = false;
-		
-		public Slice(Direction open, Direction close){
-			this.open = open;
-			this.close = close;
-			checkConcave();
-		}
-		
-		public boolean add(Direction o, Direction c){
-			boolean success = false;
-			if(complete)return true;
-			if(contains(o)){
-				if(contains(c)){
-					if(new Slice(o,c).contains(open)){
-						close = open;
-						complete = true;
-						return true;
-					}
-					success = true;
-				}else{
-					close = c;
-					success = true;
-				}
-			}else{
-				if(contains(c)){
-					open = o;
-					success = true;
-				}else{
-					Slice other = new Slice(o,c);
-					if(other.contains(open) && other.contains(close)){
-						success = true;
-						open = other.open;
-						close = other.close;
-						concave = other.concave;
-						complete = other.complete;
-						if(complete)return true;
-					}
-				}
-			}
-
-			checkConcave();
-			return success;
-		}
-		
-		public boolean add(Slice slice){
-			if(slice.concave){
-				Direction mid1 = new Direction(slice.open.radians-(float)Math.PI);
-				Direction mid2 = new Direction(slice.close.radians+(float)Math.PI);
-				if(add(slice.open, mid1)){
-					add(mid2,slice.close);
-				}else{
-					if(add(mid2,slice.close)){
-						add(slice.open, mid1);
-					}else{
-						return false;
-					}
-				}
-			}else{
-				return add(slice.open, slice.close);
-			}
-			return true;
-		}
-		
-		public void checkConcave(){
-			concave = close.radiansBetween(open)<0;
-		}
-		
-		public boolean contains(Direction dir){
-			boolean inside = false;
-			if(!concave){
-				if(close.radiansBetween(dir)>=0 && dir.radiansBetween(open)>=0){
-					inside = true;
-				}
-			}else{
-				inside = true;
-				if(open.radiansBetween(dir)>0 && dir.radiansBetween(close)>0){
-					inside = false;;
-				}
-			}
-			return inside;
-		}
-		
-	}
-	
 }
