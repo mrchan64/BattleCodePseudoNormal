@@ -13,6 +13,7 @@ public class Archon {
 	MapLocation here;
 	RobotInfo[] ri;
 	Direction buildDir;
+	int numBuilders = 0;
 	
 	public Archon(RobotController rc){
 		this.rc = rc;
@@ -57,7 +58,9 @@ public class Archon {
 		MapLocation allyLocation = getCenter(ally);
 		relativeSafety = enemyLocation.add(enemyLocation.directionTo(allyLocation), enemyLocation.distanceTo(allyLocation)*safetyMultiplier);
 		System.out.println("rs "+relativeSafety);
+		BroadcastSystem.setAllyLocation(rc, allyLocation);
 		BroadcastSystem.sendEnemyLocation(rc, enemyLocation, 0, 0);
+		BroadcastSystem.initWalls(rc);
 	}
 	
 	public MapLocation getCenter(MapLocation[] list){
@@ -83,7 +86,8 @@ public class Archon {
 			BroadcastSystem.resetSensed(rc);
 			BroadcastSystem.resetGardenerDest(rc);
 			BroadcastSystem.setRelativeSafety(rc, relativeSafety);
-			//cashIn();
+			numBuilders = BroadcastSystem.numBuilders(rc);
+			cashIn();
 		}
 		attemptBuild();
 	}
@@ -98,17 +102,21 @@ public class Archon {
 		}
 	}
 	
-	public void build(){
-		
-	}
-	
 	public void attemptBuild(){
-		Direction buildDir = here.directionTo(relativeSafety);
 		
-		/*if(rc.getTeamBullets()<(float)rc.getRoundNum()/2){
-			return;
-		}*/
+		if(!rc.isBuildReady() || rc.getTeamBullets() < RobotType.GARDENER.bulletCost)return;
+		
+		Direction buildDir = here.directionTo(relativeSafety);
 		Slice[] avoid = Slice.combine(detectObstacles(), detectTrees());
+		
+		for(int i = 0; i<avoid.length; i++){
+			for(int j = i+1; j<avoid.length; j++){
+				if(avoid[i].add(avoid[j])){
+					avoid = remove(avoid, j);
+					j = i;
+				}
+			}
+		}
 		
 		for(int i = 0; i<avoid.length; i++){
 			if(avoid[i].contains(buildDir)){
@@ -127,6 +135,8 @@ public class Archon {
 			}catch(Exception e){
 				System.out.println("Can't build gardener there");
 			}
+		}else{
+			System.out.println("Can't build gardener there, calculation is off");
 		}
 	}
 	

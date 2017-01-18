@@ -37,7 +37,8 @@ public class RobotPlayer {
 				gf.go();
 			}else{
 				System.out.println("buildGardenerCreated");
-				//build Build gardener
+				Gardener_Building gb = new Gardener_Building(rc);
+				gb.go();
 			}
 		}else{
 			Gardener_Farming gf = new Gardener_Farming(rc);

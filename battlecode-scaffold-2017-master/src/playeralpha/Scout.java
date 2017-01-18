@@ -78,6 +78,15 @@ public class Scout {
 		if(cantMove){
 			cantMove = false;
 			scoutingTurns++;
+			if(Math.PI/4*3 > scoutingDir && scoutingDir >= Math.PI/4){
+				BroadcastSystem.setWall(rc, here.y+body, "NORTH");
+			}else if(Math.PI/4 > scoutingDir && scoutingDir >= -1*Math.PI/4){
+				BroadcastSystem.setWall(rc, here.x+body, "EAST");
+			}else if(-1*Math.PI/4 > scoutingDir && scoutingDir >= -1*Math.PI/4*3){
+				BroadcastSystem.setWall(rc, here.y-body, "SOUTH");
+			}else{
+				BroadcastSystem.setWall(rc, here.x-body, "WEST");
+			}
 		}
 		
 		if(scoutingDir>0){
@@ -96,7 +105,7 @@ public class Scout {
 			for(int j = i+1; j<avoid.length; j++){
 				if(avoid[i].add(avoid[j])){
 					avoid = remove(avoid, j);
-					j = i+1;
+					j = i;
 				}
 			}
 		}

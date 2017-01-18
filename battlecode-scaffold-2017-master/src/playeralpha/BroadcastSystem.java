@@ -27,6 +27,13 @@ public class BroadcastSystem {
 	public static final int GARDENER_MIGRATING = 19;
 	public static final int MIGRATED_FARMERS = 20;
 	public static final int ON_HOLD_FARMERS = 21;
+	public static final int BUILDING_GARDENERS = 22;
+	public static final int WEST_WALL = 23;
+	public static final int EAST_WALL = 24;
+	public static final int NORTH_WALL = 25;
+	public static final int SOUTH_WALL = 26;
+	public static final int ALLY_LOCATION_X = 27;
+	public static final int ALLY_LOCATION_Y = 28;
 	
 	public static int previousHead = 1;
 	public static int scoutNum = -1;
@@ -293,5 +300,100 @@ public class BroadcastSystem {
 			System.out.println("[ERROR] Farmer Check Failed");
 		}
 		return new int[]{0,0};
+	}
+	
+	public static void countBuilders(RobotController rc){
+		try{
+			int num = rc.readBroadcast(BUILDING_GARDENERS);
+			rc.broadcast(BUILDING_GARDENERS, num+1);
+		}catch(Exception e){
+			System.out.println("[ERROR] Builder Count Failed");
+		}
+	}
+	
+	public static int numBuilders(RobotController rc){
+		try{
+			int num = rc.readBroadcast(BUILDING_GARDENERS);
+			rc.broadcast(BUILDING_GARDENERS, 0);
+			return num;
+		}catch(Exception e){
+			System.out.println("[ERROR] Builder Reset Failed");
+		}
+		return 0;
+	}
+	
+	public static void initWalls(RobotController rc){
+		try{
+			rc.broadcast(EAST_WALL, Integer.MAX_VALUE);
+			rc.broadcast(WEST_WALL, Integer.MIN_VALUE);
+			rc.broadcast(NORTH_WALL, Integer.MAX_VALUE);
+			rc.broadcast(SOUTH_WALL, Integer.MIN_VALUE);
+		}catch(Exception e){
+			System.out.println("[ERROR] Wall Init Failed");
+		}
+	}
+	
+	public static int[] getWalls(RobotController rc){
+		try{
+			int[] walls = {
+					rc.readBroadcast(EAST_WALL),
+					rc.readBroadcast(WEST_WALL),
+					rc.readBroadcast(NORTH_WALL),
+					rc.readBroadcast(SOUTH_WALL),
+			};
+			return walls;
+		}catch(Exception e){
+			System.out.println("[ERROR] Wall Init Failed");
+		}
+		return new int[0];
+	}
+	
+	public static void setWall(RobotController rc, float pos, String dir){
+		try{
+			switch(dir){
+			case "EAST":
+				if(rc.readBroadcast(EAST_WALL)>(int) pos+1){
+					rc.broadcast(EAST_WALL, (int) pos+1);
+				}
+				break;
+			case "WEST":
+				if(rc.readBroadcast(WEST_WALL)<(int) pos){
+					rc.broadcast(WEST_WALL, (int) pos);
+				}
+				break;
+			case "NORTH":
+				if(rc.readBroadcast(NORTH_WALL)>(int) pos+1){
+					rc.broadcast(NORTH_WALL, (int) pos+1);
+				}
+				break;
+			case "SOUTH":
+				if(rc.readBroadcast(SOUTH_WALL)<(int) pos+1){
+					rc.broadcast(SOUTH_WALL, (int) pos);
+				}
+				break;
+			default:
+				System.out.println("[ERROR] Wall Dir Invalid");
+			}
+		}catch(Exception e){
+			System.out.println("[ERROR] Wall Init Failed");
+		}
+	}
+	
+	public static void setAllyLocation(RobotController rc, MapLocation ml){
+		try{
+			rc.broadcast(ALLY_LOCATION_X, (int) ml.x); 
+			rc.broadcast(ALLY_LOCATION_Y, (int) ml.y); 
+		}catch(Exception e){
+			System.out.println("[ERROR] Ally Location Set Failed");
+		}
+	}
+	
+	public static MapLocation getAllyLocation(RobotController rc){
+		try{
+			return new MapLocation(rc.readBroadcast(ALLY_LOCATION_X), rc.readBroadcast(ALLY_LOCATION_Y)); 
+		}catch(Exception e){
+			System.out.println("[ERROR] Ally Location Set Failed");
+		}
+		return null;
 	}
 }

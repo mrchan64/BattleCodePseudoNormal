@@ -207,6 +207,38 @@ public class Gardener_Farming {
 		}
 	}
 	
+	public void detectWallDir(Slice[] unavailable){
+		Direction east = new Direction(0);
+		Direction west = new Direction((float)Math.PI);
+		Direction north = new Direction((float)Math.PI/2);
+		Direction south = new Direction(-1*(float)Math.PI/2);
+		
+		for(int i = 0; i<unavailable.length; i++){
+			if(unavailable[i].contains(east)){
+				east = null;
+			}
+			if(unavailable[i].contains(west)){
+				west = null;
+			}
+			if(unavailable[i].contains(north)){
+				north = null;
+			}
+			if(unavailable[i].contains(south)){
+				south = null;
+			}
+		}
+		
+		if(east != null && !rc.canMove(east)){
+			BroadcastSystem.setWall(rc, here.x+body, "EAST");
+		}else if(west != null && !rc.canMove(west)){
+			BroadcastSystem.setWall(rc, here.x-body, "WEST");
+		}else if(north != null && !rc.canMove(north)){
+			BroadcastSystem.setWall(rc, here.y+body, "NORTH");
+		}else if(south != null && !rc.canMove(south)){
+			BroadcastSystem.setWall(rc, here.y-body, "SOUTH");
+		}
+	}
+	
 	public Slice[] evadeObstacles(){
 		Slice[] unavailable = null;
 		for(int i = 0; i<ri.length; i++){
@@ -331,7 +363,6 @@ public class Gardener_Farming {
 			}
 		}
 		previousDir = general.rotateRightRads((float)Math.PI);
-		System.out.println(onBranch);
 		if(onBranch > maxOnBranch){
 			stuck = true;
 			BroadcastSystem.setInvalidLocation(rc, destination);

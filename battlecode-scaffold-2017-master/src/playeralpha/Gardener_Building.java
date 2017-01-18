@@ -9,10 +9,13 @@ public class Gardener_Building {
 	float stride, body;
 	MapLocation here;
 	MapLocation enemyLocation;
+	MapLocation allyLocation;
 	RobotInfo[] ri;
 	boolean migrating = false;
+	Direction general;
 	
 	public Gardener_Building(RobotController rc){
+		allyLocation = BroadcastSystem.getAllyLocation(rc);
 		this.rc = rc;
 		stride = type.strideRadius;
 		body = type.bodyRadius;
@@ -30,6 +33,8 @@ public class Gardener_Building {
 			ri = rc.senseNearbyRobots();
 			int[] arr = BroadcastSystem.readEnemyLocation(rc);
 			enemyLocation = new MapLocation(arr[0],arr[1]);
+			general = here.directionTo(new MapLocation((allyLocation.x+enemyLocation.x)/2, (allyLocation.y+enemyLocation.y)/2));
+			BroadcastSystem.countBuilders(rc);
 			//numFarmers = BroadcastSystem.checkNumFarmers(rc, !migrating);
 			if(migrating){
 				/*if(!BroadcastSystem.amMigrating(rc))return;
@@ -58,11 +63,52 @@ public class Gardener_Building {
 				nearByOpenings();
 				buildTrees();
 				waterTrees();*/
+				moveTowards();
 			}
 			Clock.yield();
 		}catch(Exception e){
 			System.out.println("[ERROR] Turn could not happen");
 			e.printStackTrace();
+		}
+	}
+	
+	public void moveTowards(){
+		Slice[] avoid;
+		
+		avoid = Slice.combine(evadeTrees(), evadeObstacles());
+		for(int i = 0; i<avoid.length; i++){
+			for(int j = i+1; j<avoid.length; j++){
+				if(avoid[i].add(avoid[j])){
+					avoid = remove(avoid, j);
+					j = i;
+				}
+			}
+		}
+		if(avoid.length>0 && avoid[0].complete){
+			return;
+		}
+		
+		avoid = attemptBuild(avoid);
+		
+		if(avoid.length>0 && avoid[0].complete){
+			return;
+		}
+		for(int i = 0; i<avoid.length; i++){
+			if(avoid[i].contains(general)){
+				if(Math.abs(avoid[i].open.radiansBetween(general))<Math.abs(avoid[i].close.radiansBetween(general))){
+					general = avoid[i].open;
+				}else{
+					general = avoid[i].close;
+				}
+				break;
+			}
+		}
+		try{
+			if(rc.canMove(general)){
+				rc.move(general);
+			}
+		}catch(Exception e){
+			System.out.println("[ERROR] Tried to move");
 		}
 	}
 	
@@ -135,13 +181,12 @@ public class Gardener_Building {
 		return unavailable;
 	}
 	
-	public void attemptBuild(){
+	public Slice[] attemptBuild(Slice[] avoid){
 		Direction buildDir = here.directionTo(enemyLocation);
 		
 		/*if(rc.getTeamBullets()<(float)rc.getRoundNum()/2){
 			return;
 		}*/
-		Slice[] avoid = Slice.combine(evadeObstacles(), evadeTrees());
 		
 		for(int i = 0; i<avoid.length; i++){
 			if(avoid[i].contains(buildDir)){
@@ -154,13 +199,24 @@ public class Gardener_Building {
 			}
 		}
 		
-		if(rc.canBuildRobot(RobotType.GARDENER, buildDir)){
+		if(rc.canBuildRobot(RobotType.SCOUT, buildDir)){
 			try{
-				rc.buildRobot(RobotType.GARDENER, buildDir);
+				rc.buildRobot(RobotType.SCOUT, buildDir);
+				Slice newSlice = new Slice(buildDir.rotateLeftDegrees((float)Math.PI/2), buildDir.rotateRightDegrees((float)Math.PI/2));
+				avoid = Slice.combine(avoid, new Slice[]{newSlice});
 			}catch(Exception e){
 				System.out.println("Can't build gardener there");
 			}
 		}
+		for(int i = 0; i<avoid.length; i++){
+			for(int j = i+1; j<avoid.length; j++){
+				if(avoid[i].add(avoid[j])){
+					avoid = remove(avoid, j);
+					j = i;
+				}
+			}
+		}
+		return avoid;
 	}
 	
 	public Slice[] remove(Slice[] arg, int index){
