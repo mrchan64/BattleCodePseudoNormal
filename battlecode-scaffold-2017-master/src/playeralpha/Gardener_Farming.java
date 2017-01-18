@@ -27,6 +27,7 @@ public class Gardener_Farming {
 	final int maxWrongDir = 25;
 	final int deathOnBranch = 180;
 	final int maxOnBranch = 160;
+	final int maxFirstGardener;
 	Direction[] dirs = {new Direction(0), 
 			new Direction((float) (Math.PI/3)), 
 			new Direction((float) (Math.PI/3*2)), 
@@ -45,6 +46,7 @@ public class Gardener_Farming {
 		this.rc = rc;
 		stride = type.strideRadius;
 		body = type.bodyRadius;
+		maxFirstGardener = (int)rc.getLocation().distanceTo(BroadcastSystem.getRelativeSafety(rc)) * 3;
 	}
 	
 	public void go(){
@@ -168,6 +170,8 @@ public class Gardener_Farming {
 			return;
 		}
 		
+		detectWallDir(avoid);
+		
 		Direction other = null;
 
 		for(int i = 0; i<avoid.length; i++){
@@ -214,16 +218,16 @@ public class Gardener_Farming {
 		Direction south = new Direction(-1*(float)Math.PI/2);
 		
 		for(int i = 0; i<unavailable.length; i++){
-			if(unavailable[i].contains(east)){
+			if(east != null && unavailable[i].contains(east)){
 				east = null;
 			}
-			if(unavailable[i].contains(west)){
+			if(west != null && unavailable[i].contains(west)){
 				west = null;
 			}
-			if(unavailable[i].contains(north)){
+			if(north != null && unavailable[i].contains(north)){
 				north = null;
 			}
-			if(unavailable[i].contains(south)){
+			if(south != null && unavailable[i].contains(south)){
 				south = null;
 			}
 		}
@@ -363,9 +367,17 @@ public class Gardener_Farming {
 			}
 		}
 		previousDir = general.rotateRightRads((float)Math.PI);
+		
+		if(numFarmers == 0 && onBranch > maxFirstGardener){
+			migrating = false;
+		}
 		if(onBranch > maxOnBranch){
-			stuck = true;
-			BroadcastSystem.setInvalidLocation(rc, destination);
+			if(numFarmers == 0){
+				migrating = false;
+			}else{
+				stuck = true;
+				BroadcastSystem.setInvalidLocation(rc, destination);
+			}
 		}
 		if(onBranch > deathOnBranch){
 			rc.disintegrate();
@@ -381,28 +393,34 @@ public class Gardener_Farming {
 		
 		MapLocation closest = null;
 		float distance = 0;
+		int[] walls = BroadcastSystem.getWalls(rc);
 		for(int i = 0; i<availLocs.length; i++){
 			try{
 				if(n!=null && Math.abs(n.x-availLocs[i].x)<.5 && Math.abs(n.y-availLocs[i].y)<.5){
 					removeLoc(i);
 					i--;
 				}else{
-					RobotInfo check = rc.senseRobotAtLocation(availLocs[i]);
-					if(check != null && Math.abs(check.location.x - availLocs[i].x) < floatError && Math.abs(check.location.y - availLocs[i].y) < floatError){
-						removeLoc(i);
-						i--;
-					}else{
-						TreeInfo check2 = rc.senseTreeAtLocation(availLocs[i]);
-						if(check2 != null && availLocs[i].distanceTo(check2.location)<check2.radius+body){
+					if(walls[0]>=availLocs[i].x && availLocs[i].x>=walls[1] && walls[2]>=availLocs[i].y && availLocs[i].y>=walls[3]){
+						RobotInfo check = rc.senseRobotAtLocation(availLocs[i]);
+						if(check != null && Math.abs(check.location.x - availLocs[i].x) < floatError && Math.abs(check.location.y - availLocs[i].y) < floatError){
 							removeLoc(i);
 							i--;
-						}else if(closest == null){
-							closest = availLocs[i];
-							distance = availLocs[i].distanceTo(relativeSafety);
-						}else if(availLocs[i].distanceTo(relativeSafety)<distance){
-							closest = availLocs[i];
-							distance = availLocs[i].distanceTo(relativeSafety);
+						}else{
+							TreeInfo check2 = rc.senseTreeAtLocation(availLocs[i]);
+							if(check2 != null && availLocs[i].distanceTo(check2.location)<check2.radius+body){
+								removeLoc(i);
+								i--;
+							}else if(closest == null){
+								closest = availLocs[i];
+								distance = availLocs[i].distanceTo(relativeSafety);
+							}else if(availLocs[i].distanceTo(relativeSafety)<distance){
+								closest = availLocs[i];
+								distance = availLocs[i].distanceTo(relativeSafety);
+							}
 						}
+					}else{
+						removeLoc(i);
+						i--;
 					}
 				}
 			}catch(Exception e){

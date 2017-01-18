@@ -8,12 +8,17 @@ public class Archon {
 	float stride, body;
 	float gardenerbody, plantDist;
 	float safetyMultiplier = 1.2F;
+	float safetyMultiplier2 = .8F;
 	float plantMargin = 1F;
+	float wallMargin = 1.233F;
 	MapLocation relativeSafety;
 	MapLocation here;
 	RobotInfo[] ri;
 	Direction buildDir;
+	int numFarmers = 0;
 	int numBuilders = 0;
+	int numOnHold = 0;
+	int numScouts = 0;
 	
 	public Archon(RobotController rc){
 		this.rc = rc;
@@ -35,9 +40,11 @@ public class Archon {
 			ri = rc.senseNearbyRobots();
 			if(rc.getRoundNum() == 1){
 				firstTurn();
+			}else{
+				relativeSafety = BroadcastSystem.getRelativeSafety(rc);
 			}
 			runHead();
-			
+			attemptBuild();
 			Clock.yield();
 		}catch(Exception e){
 			System.out.println("[ERROR] Turn could not happen");
@@ -81,15 +88,18 @@ public class Archon {
 			if(!BroadcastSystem.readSensed(rc)){
 				BroadcastSystem.setScoutFormation(rc);
 			}
-			BroadcastSystem.resetScoutsCode(rc);
+			numScouts = BroadcastSystem.resetScoutsCode(rc);
+			int[] arr = BroadcastSystem.checkFarmers(rc);
+			numFarmers = arr[0];
+			numOnHold = arr[1];
 			BroadcastSystem.resetNumFarmers(rc);
 			BroadcastSystem.resetSensed(rc);
 			BroadcastSystem.resetGardenerDest(rc);
+			relocateRelativeSafety();
 			BroadcastSystem.setRelativeSafety(rc, relativeSafety);
 			numBuilders = BroadcastSystem.numBuilders(rc);
 			cashIn();
 		}
-		attemptBuild();
 	}
 	
 	public void cashIn(){
@@ -104,7 +114,11 @@ public class Archon {
 	
 	public void attemptBuild(){
 		
+		if(BroadcastSystem.allOrNothing(rc)) return;
+		
 		if(!rc.isBuildReady() || rc.getTeamBullets() < RobotType.GARDENER.bulletCost)return;
+		
+		if(numOnHold == RobotPlayer.MAX_ON_HOLD && numBuilders>numScouts + 2)return;
 		
 		Direction buildDir = here.directionTo(relativeSafety);
 		Slice[] avoid = Slice.combine(detectObstacles(), detectTrees());
@@ -117,6 +131,7 @@ public class Archon {
 				}
 			}
 		}
+		avoid = detectWallDir(avoid);
 		
 		for(int i = 0; i<avoid.length; i++){
 			if(avoid[i].contains(buildDir)){
@@ -136,8 +151,164 @@ public class Archon {
 				System.out.println("Can't build gardener there");
 			}
 		}else{
-			System.out.println("Can't build gardener there, calculation is off");
+			//System.out.println("Can't build gardener there, calculation is off");
+			//find walldir right here
 		}
+	}
+	
+	public Slice[] detectWallDir(Slice[] unavailable){
+		Direction east = new Direction(0);
+		Direction west = new Direction((float)Math.PI);
+		Direction north = new Direction((float)Math.PI/2);
+		Direction south = new Direction(-1*(float)Math.PI/2);
+		
+		for(int i = 0; i<unavailable.length; i++){
+			if(east != null && unavailable[i].contains(east)){
+				east = null;
+			}
+			if(west != null && unavailable[i].contains(west)){
+				west = null;
+			}
+			if(north != null && unavailable[i].contains(north)){
+				north = null;
+			}
+			if(south != null && unavailable[i].contains(south)){
+				south = null;
+			}
+		}
+		
+		if(east != null && !rc.canBuildRobot(RobotType.GARDENER, east)){
+			BroadcastSystem.setWall(rc, here.x+body, "EAST");
+			Slice wall = new Slice(east.rotateLeftRads(wallMargin), east.rotateRightRads(wallMargin));
+			Slice[] newSet = new Slice[unavailable.length+1];
+			for(int i = 0; i<unavailable.length; i++){
+				newSet[i+1] = unavailable[i];
+			}
+			newSet[0] = wall;
+			unavailable = newSet;
+		}else if(west != null && !rc.canBuildRobot(RobotType.GARDENER, west)){
+			BroadcastSystem.setWall(rc, here.x-body, "WEST");
+			Slice wall = new Slice(west.rotateLeftRads(wallMargin), west.rotateRightRads(wallMargin));
+			Slice[] newSet = new Slice[unavailable.length+1];
+			for(int i = 0; i<unavailable.length; i++){
+				newSet[i+1] = unavailable[i];
+			}
+			newSet[0] = wall;
+			unavailable = newSet;
+		}else if(north != null && !rc.canBuildRobot(RobotType.GARDENER, north)){
+			BroadcastSystem.setWall(rc, here.y+body, "NORTH");
+			Slice wall = new Slice(north.rotateLeftRads(wallMargin), north.rotateRightRads(wallMargin));
+			Slice[] newSet = new Slice[unavailable.length+1];
+			for(int i = 0; i<unavailable.length; i++){
+				newSet[i+1] = unavailable[i];
+			}
+			newSet[0] = wall;
+			unavailable = newSet;
+		}else if(south != null && !rc.canBuildRobot(RobotType.GARDENER, south)){
+			BroadcastSystem.setWall(rc, here.y-body, "SOUTH");
+			Slice wall = new Slice(south.rotateLeftRads(wallMargin), south.rotateRightRads(wallMargin));
+			Slice[] newSet = new Slice[unavailable.length+1];
+			for(int i = 0; i<unavailable.length; i++){
+				newSet[i+1] = unavailable[i];
+			}
+			newSet[0] = wall;
+			unavailable = newSet;
+		}
+		for(int i = 0; i<unavailable.length; i++){
+			for(int j = i+1; j<unavailable.length; j++){
+				if(unavailable[i].add(unavailable[j])){
+					unavailable = remove(unavailable, j);
+					j = i;
+				}
+			}
+		}
+		return unavailable;
+	}
+	
+	public void relocateRelativeSafety(){
+		if(rc.getRoundNum() == 1)return;
+		int[] walls = BroadcastSystem.getWalls(rc);
+		if(relativeSafety.x>walls[0] || relativeSafety.x<walls[1] || relativeSafety.y>walls[2] || relativeSafety.y<walls[3]){
+			MapLocation enemy[];
+			MapLocation ally[];
+			if(rc.getTeam()==Team.A){
+				ally = rc.getInitialArchonLocations(Team.A);
+				enemy = rc.getInitialArchonLocations(Team.B);
+			}else{
+				ally = rc.getInitialArchonLocations(Team.B);
+				enemy = rc.getInitialArchonLocations(Team.A);
+			}
+			float[] pseudoWalls = getPseudoWalls(ally, enemy);
+			MapLocation e = getCenter(enemy);
+			MapLocation a = getCenter(ally);
+			Direction theta = e.directionTo(a);
+			MapLocation intersect = e.add(theta, e.distanceTo(a) * safetyMultiplier2);
+			Direction newTheta = theta.rotateLeftRads((float)Math.PI/2);
+			int region = (int)((theta.radians+Math.PI*2)/(Math.PI/2))%4;
+			float yDiff;
+			float xDiff;
+			float ratio;
+			float dist;
+			switch(region){
+			case 0:
+				yDiff = pseudoWalls[2] - intersect.y;
+				ratio = (float) Math.sin(theta.radians);
+				dist = yDiff * ratio;
+				relativeSafety = intersect.add(newTheta, dist);
+				break;
+			case 1:
+				xDiff = intersect.x - pseudoWalls[1];
+				ratio = (float) Math.sin(theta.radians-Math.PI/2);
+				dist = xDiff * ratio;
+				relativeSafety = intersect.add(newTheta, dist);
+				break;
+			case 2:
+				yDiff = intersect.y - pseudoWalls[3];
+				ratio = (float) Math.sin(theta.radians-Math.PI);
+				dist = yDiff * ratio;
+				relativeSafety = intersect.add(newTheta, dist);
+				break;
+			case 3:
+				xDiff = pseudoWalls[0] - intersect.x;
+				ratio = (float) Math.sin(theta.radians-Math.PI/2*3);
+				dist = xDiff * ratio;
+				relativeSafety = intersect.add(newTheta, dist);
+				break;
+			}
+		}
+	}
+	
+	public float[] getPseudoWalls(MapLocation[] ally, MapLocation[] enemy){
+		float[] walls = {Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE};
+		for(int i = 0; i<ally.length; i++){
+			if(ally[i].x>walls[0]){
+				walls[0] = ally[i].x;
+			}else if(ally[i].x<walls[1]){
+				walls[1] = ally[i].x;
+			}
+			if(ally[i].y>walls[2]){
+				walls[2] = ally[i].y;
+			}else if(ally[i].y<walls[3]){
+				walls[3] = ally[i].y;
+			}
+		}
+		for(int i = 0; i<enemy.length; i++){
+			if(enemy[i].x>walls[0]){
+				walls[0] = enemy[i].x;
+			}else if(enemy[i].x<walls[1]){
+				walls[1] = enemy[i].x;
+			}
+			if(enemy[i].y>walls[2]){
+				walls[2] = enemy[i].y;
+			}else if(enemy[i].y<walls[3]){
+				walls[3] = enemy[i].y;
+			}
+		}
+		walls[0] += body;
+		walls[1] -= body;
+		walls[2] += body;
+		walls[3] -= body;
+		return walls;
 	}
 	
 	public Slice[] detectObstacles(){

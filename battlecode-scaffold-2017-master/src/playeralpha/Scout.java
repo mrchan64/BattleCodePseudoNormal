@@ -15,7 +15,7 @@ public class Scout {
 	float stride, body;
 	MapLocation enemylocation;
 	MapLocation here;
-	Direction shooting;
+	MapLocation shooting;
 	Direction general;
 	int generalThreat;
 	int generalID;
@@ -63,7 +63,7 @@ public class Scout {
 				}
 			}
 			if(shooting != null && rc.canFireSingleShot()){
-				rc.fireSingleShot(shooting);
+				rc.fireSingleShot(rc.getLocation().directionTo(shooting));
 			}
 			Clock.yield();
 		}catch(Exception e){
@@ -185,44 +185,57 @@ public class Scout {
 		return false;
 	}
 	
+	public void shakeTrees(){
+		TreeInfo[] ti = rc.senseNearbyTrees();
+		for(int i = 0; i<ti.length; i++){
+			if(rc.canShake(ti[i].ID)){
+				try{
+					rc.shake(ti[i].ID);
+					break;
+				}catch(Exception e){
+					System.out.println("[ERROR] Could Not Shake");
+				}
+			}
+		}
+	}
+	
 	public Slice[] evadeObstacles(){
 		Slice[] unavailable = null;
 		int targThreat = 0;
 		for(int i = 0; i<ri.length; i++){
 			if(ri[i].team != rc.getTeam()){
-				Direction toOpponent = here.directionTo(ri[i].location);
-				if(efficient || !allyBetween(toOpponent)){
+				if(efficient || !allyBetween(here.directionTo(ri[i].location))){
 					switch(ri[i].getType()){
 					case TANK:
 						if(targThreat<1){
 							targThreat = 1;
-							shooting = toOpponent;
+							shooting = ri[i].location;
 						}
 					case LUMBERJACK:
 						if(targThreat<2){
 							targThreat = 2;
-							shooting = toOpponent;
+							shooting = ri[i].location;
 						}
 					case SOLDIER:
 						if(targThreat<3){
 							targThreat = 3;
-							shooting = toOpponent;
+							shooting = ri[i].location;
 						}
 					case SCOUT:
 						if(targThreat<4){
 							targThreat = 4;
-							shooting = toOpponent;
+							shooting = ri[i].location;
 						}
 					case GARDENER:
 						if(targThreat<5){
 							targThreat = 5;
-							shooting = toOpponent;
+							shooting = ri[i].location;
 							enemylocation = ri[i].location;
 						}
 					case ARCHON:
 						if(targThreat<6){
 							targThreat = 6;
-							shooting = toOpponent;
+							shooting = ri[i].location;
 							enemylocation = ri[i].location;
 						}
 					}

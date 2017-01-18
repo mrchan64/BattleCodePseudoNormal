@@ -13,6 +13,9 @@ public class Gardener_Building {
 	RobotInfo[] ri;
 	boolean migrating = false;
 	Direction general;
+	int buildTurn = 0;
+	public final int MAX_IDLE_TURNS = 50;
+	public static final int ALL_OR_NOTHING = 1500;
 	
 	public Gardener_Building(RobotController rc){
 		allyLocation = BroadcastSystem.getAllyLocation(rc);
@@ -57,6 +60,7 @@ public class Gardener_Building {
 				}
 				here = rc.getLocation();*/
 			}else{
+				checkBuildTurn();
 				/*if(availLocs == null){
 					setAvailLocs();
 				}
@@ -64,6 +68,7 @@ public class Gardener_Building {
 				buildTrees();
 				waterTrees();*/
 				moveTowards();
+				buildTurn++;
 			}
 			Clock.yield();
 		}catch(Exception e){
@@ -182,6 +187,9 @@ public class Gardener_Building {
 	}
 	
 	public Slice[] attemptBuild(Slice[] avoid){
+		
+		if(BroadcastSystem.allOrNothing(rc))return avoid;
+		
 		Direction buildDir = here.directionTo(enemyLocation);
 		
 		/*if(rc.getTeamBullets()<(float)rc.getRoundNum()/2){
@@ -204,6 +212,7 @@ public class Gardener_Building {
 				rc.buildRobot(RobotType.SCOUT, buildDir);
 				Slice newSlice = new Slice(buildDir.rotateLeftDegrees((float)Math.PI/2), buildDir.rotateRightDegrees((float)Math.PI/2));
 				avoid = Slice.combine(avoid, new Slice[]{newSlice});
+				buildTurn = 0;
 			}catch(Exception e){
 				System.out.println("Can't build gardener there");
 			}
@@ -228,5 +237,11 @@ public class Gardener_Building {
 			newArg[i] = arg[i+1];
 		}
 		return newArg;
+	}
+	
+	public void checkBuildTurn(){
+		if(buildTurn>MAX_IDLE_TURNS){
+			rc.disintegrate();
+		}
 	}
 }

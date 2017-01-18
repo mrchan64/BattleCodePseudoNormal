@@ -34,8 +34,9 @@ public class BroadcastSystem {
 	public static final int SOUTH_WALL = 26;
 	public static final int ALLY_LOCATION_X = 27;
 	public static final int ALLY_LOCATION_Y = 28;
+	public static final int ALL_OR_NOTHING = 29;
 	
-	public static int previousHead = 1;
+	public static int previousHead = 0;
 	public static int scoutNum = -1;
 	
 	public static void sendEnemyLocation(RobotController rc, MapLocation ml, int threat, int id){
@@ -83,14 +84,16 @@ public class BroadcastSystem {
 		}
 	}
 	
-	public static void resetScoutsCode(RobotController rc){
+	public static int resetScoutsCode(RobotController rc){
 		try{
 			int n = rc.readBroadcast(SCOUTS_CODE);
 			rc.broadcast(SCOUTS_TOTAL, n);
 			rc.broadcast(SCOUTS_CODE, 0);
+			return n;
 		}catch(Exception e){
 			System.out.println("[ERROR] Scouts Code Reset Failed");
 		}
+		return 0;
 	}
 	
 	public static boolean readSensed(RobotController rc){
@@ -395,5 +398,17 @@ public class BroadcastSystem {
 			System.out.println("[ERROR] Ally Location Set Failed");
 		}
 		return null;
+	}
+	
+	public static boolean allOrNothing(RobotController rc){
+		try{
+			if(rc.getRoundNum()>Gardener_Building.ALL_OR_NOTHING && rc.readBroadcast(MIGRATED_FARMERS)>2){
+				return true;
+			}
+			return false;
+		}catch(Exception e){
+			System.out.println("[ERROR] All Or Nothing Check Failed");
+		}
+		return false;
 	}
 }
