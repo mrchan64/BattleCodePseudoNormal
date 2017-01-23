@@ -1,4 +1,4 @@
-package playeralpha;
+package playerbeta;
 import battlecode.common.*;
 
 public class Archon {
@@ -44,7 +44,6 @@ public class Archon {
 				relativeSafety = BroadcastSystem.getRelativeSafety(rc);
 			}
 			runHead();
-			attemptBuild();
 			Clock.yield();
 		}catch(Exception e){
 			System.out.println("[ERROR] Turn could not happen");
@@ -85,6 +84,7 @@ public class Archon {
 	public void runHead(){
 		boolean isHead = BroadcastSystem.checkHead(rc);
 		if(isHead){
+			attemptBuild();
 			if(!BroadcastSystem.readSensed(rc)){
 				BroadcastSystem.setScoutFormation(rc);
 			}
@@ -103,9 +103,9 @@ public class Archon {
 	}
 	
 	public void cashIn(){
-		if(rc.getTeamBullets()>GameConstants.VICTORY_POINTS_TO_WIN * 10+1){
+		if(rc.getTeamBullets()>1000){
 			try {
-				rc.donate(GameConstants.VICTORY_POINTS_TO_WIN * 10 + 1);
+				rc.donate(rc.getTeamBullets()-1000);
 			} catch (GameActionException e) {
 				System.out.println("[Error] Couldn't donate");
 			}
@@ -118,7 +118,7 @@ public class Archon {
 		
 		if(!rc.isBuildReady() || rc.getTeamBullets() < RobotType.GARDENER.bulletCost)return;
 		
-		if(numOnHold == RobotPlayer.MAX_ON_HOLD && numBuilders>numScouts + 2)return;
+		if(numOnHold == RobotPlayer.MAX_ON_HOLD /*&& numBuilders>numScouts + 2*/)return;
 		
 		Direction buildDir = here.directionTo(relativeSafety);
 		Slice[] avoid = Slice.combine(detectObstacles(), detectTrees());
