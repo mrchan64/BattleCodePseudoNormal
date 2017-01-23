@@ -4,6 +4,7 @@ import battlecode.common.*;
 public class Archon {
 	
 	RobotController rc;
+	Head head;
 	RobotType type = RobotType.ARCHON;
 	float stride, body;
 	float gardenerbody, plantDist;
@@ -16,12 +17,12 @@ public class Archon {
 	RobotInfo[] ri;
 	Direction buildDir;
 	int numFarmers = 0;
-	int numBuilders = 0;
 	int numOnHold = 0;
-	int numScouts = 0;
+	int buildingCounter = 1;
 	
 	public Archon(RobotController rc){
 		this.rc = rc;
+		head = new Head(rc);
 		stride = type.strideRadius;
 		body = type.bodyRadius;
 		gardenerbody = RobotType.GARDENER.bodyRadius;
@@ -38,12 +39,18 @@ public class Archon {
 		try{
 			here = rc.getLocation();
 			ri = rc.senseNearbyRobots();
+			int[] arr = BroadcastSystem.checkFarmers(rc);
+			numFarmers = arr[0];
+			numOnHold = arr[1];
 			if(rc.getRoundNum() == 1){
 				firstTurn();
 			}else{
 				relativeSafety = BroadcastSystem.getRelativeSafety(rc);
 			}
-			runHead();
+			System.out.println("Farm "+numFarmers+" "+numOnHold);
+			head.runHead();
+			attemptBuild();
+			checkBuilding();
 			Clock.yield();
 		}catch(Exception e){
 			System.out.println("[ERROR] Turn could not happen");
@@ -81,56 +88,15 @@ public class Archon {
 		return new MapLocation(totX, totY);
 	}
 	
-	public void runHead(){
-		boolean isHead = BroadcastSystem.checkHead(rc);
-		if(isHead){
-			attemptBuild();
-			if(!BroadcastSystem.readSensed(rc)){
-				BroadcastSystem.setScoutFormation(rc);
-			}
-			numScouts = BroadcastSystem.resetScoutsCode(rc);
-			int[] arr = BroadcastSystem.checkFarmers(rc);
-			numFarmers = arr[0];
-			numOnHold = arr[1];
-			BroadcastSystem.resetNumFarmers(rc);
-			BroadcastSystem.resetSensed(rc);
-			BroadcastSystem.resetGardenerDest(rc);
-			relocateRelativeSafety();
-			BroadcastSystem.setRelativeSafety(rc, relativeSafety);
-			numBuilders = BroadcastSystem.numBuilders(rc);
-			cashIn();
-		}
-	}
-	
-	public void cashIn(){
-		if(rc.getTeamBullets()>1000){
-			try {
-				rc.donate(rc.getTeamBullets()-1000);
-			} catch (GameActionException e) {
-				System.out.println("[Error] Couldn't donate");
-			}
-		}
-	}
-	
 	public void attemptBuild(){
 		
-		if(BroadcastSystem.allOrNothing(rc)) return;
+		if(!rc.isBuildReady() || rc.getTeamBullets() < RobotType.GARDENER.bulletCost + numFarmers * 25)return;
 		
-		if(!rc.isBuildReady() || rc.getTeamBullets() < RobotType.GARDENER.bulletCost)return;
-		
-		if(numOnHold == RobotPlayer.MAX_ON_HOLD /*&& numBuilders>numScouts + 2*/)return;
+		if(rc.getRoundNum() < RobotPlayer.LIMIT_GARDENER_TURN && numOnHold >= RobotPlayer.MAX_ON_HOLD )return;
 		
 		Direction buildDir = here.directionTo(relativeSafety);
 		Slice[] avoid = Slice.combine(detectObstacles(), detectTrees());
 		
-		for(int i = 0; i<avoid.length; i++){
-			for(int j = i+1; j<avoid.length; j++){
-				if(avoid[i].add(avoid[j])){
-					avoid = remove(avoid, j);
-					j = i;
-				}
-			}
-		}
 		avoid = detectWallDir(avoid);
 		
 		for(int i = 0; i<avoid.length; i++){
@@ -147,6 +113,8 @@ public class Archon {
 		if(rc.canBuildRobot(RobotType.GARDENER, buildDir)){
 			try{
 				rc.buildRobot(RobotType.GARDENER, buildDir);
+				buildingCounter = 3;
+				System.out.println("Build");
 			}catch(Exception e){
 				System.out.println("Can't build gardener there");
 			}
@@ -214,14 +182,7 @@ public class Archon {
 			newSet[0] = wall;
 			unavailable = newSet;
 		}
-		for(int i = 0; i<unavailable.length; i++){
-			for(int j = i+1; j<unavailable.length; j++){
-				if(unavailable[i].add(unavailable[j])){
-					unavailable = remove(unavailable, j);
-					j = i;
-				}
-			}
-		}
+		unavailable = Slice.simplify(unavailable);
 		return unavailable;
 	}
 	
@@ -333,15 +294,8 @@ public class Archon {
 			}
 		}
 		if(unavailable == null)unavailable = new Slice[0];
-		
-		for(int i = 0; i<unavailable.length; i++){
-			for(int j = i+1; j<unavailable.length; j++){
-				if(unavailable[i].add(unavailable[j])){
-					unavailable = remove(unavailable, j);
-					j = i;
-				}
-			}
-		}
+
+		unavailable = Slice.simplify(unavailable);
 		return unavailable;
 	}
 	
@@ -369,25 +323,14 @@ public class Archon {
 		}
 		if(unavailable == null)unavailable = new Slice[0];
 		
-		for(int i = 0; i<unavailable.length; i++){
-			for(int j = i+1; j<unavailable.length; j++){
-				if(unavailable[i].add(unavailable[j])){
-					unavailable = remove(unavailable, j);
-					j = i;
-				}
-			}
-		}
+		unavailable = Slice.simplify(unavailable);
 		return unavailable;
 	}
 	
-	public Slice[] remove(Slice[] arg, int index){
-		Slice[] newArg = new Slice[arg.length - 1];
-		for(int i = 0; i<index; i++){
-			newArg[i] = arg[i];
+	public void checkBuilding(){
+		if(buildingCounter > 0){
+			BroadcastSystem.archonBuilding(rc);
 		}
-		for(int i = index; i<newArg.length; i++){
-			newArg[i] = arg[i+1];
-		}
-		return newArg;
+		buildingCounter--;
 	}
 }

@@ -25,8 +25,6 @@ public class BroadcastSystem {
 	public static final int INVALID_LOCATION_Y = 17;
 	public static final int INVALID_LOCATION_SET = 18;
 	public static final int GARDENER_MIGRATING = 19;
-	public static final int MIGRATED_FARMERS = 20;
-	public static final int ON_HOLD_FARMERS = 21;
 	public static final int BUILDING_GARDENERS = 22;
 	public static final int WEST_WALL = 23;
 	public static final int EAST_WALL = 24;
@@ -35,9 +33,20 @@ public class BroadcastSystem {
 	public static final int ALLY_LOCATION_X = 27;
 	public static final int ALLY_LOCATION_Y = 28;
 	public static final int ALL_OR_NOTHING = 29;
+	public static final int LUMBERJACK_SCATTER = 30;
+	
 	public static final int GARDENING_WALL = 100;
 	public static final int PAIRING_ID = 101;
 	public static final int LJ_PAIRED = 102;
+
+	public static final int MIGRATED_FARMERS = 200;
+	public static final int MIGRATED_COUNTER = 201;
+	public static final int ON_HOLD_FARMERS = 202;
+	public static final int ON_HOLD_COUNTER = 203;
+	public static final int ALIVE_LUMBERJACKS = 204;
+	public static final int LUMBERJACK_COUNTER = 205;
+	public static final int ALIVE_SOLDIERS = 206;
+	public static final int SOLDIER_COUNTER = 207;
 	
 	public static int previousHead = 0;
 	public static int scoutNum = -1;
@@ -140,6 +149,14 @@ public class BroadcastSystem {
 			rc.broadcast(IN_ENEMY_RANGE, 1);
 		} catch (GameActionException e) {
 			System.out.println("[ERROR] Enemy Gone Message Failed");
+		}
+	}
+	
+	public static void initHead(RobotController rc){
+		try{
+			previousHead = 1 - rc.readBroadcast(HEAD_SWITCHER);
+		} catch (GameActionException e) {
+			System.out.println("[ERROR] Head Init Failed");
 		}
 	}
 	
@@ -273,14 +290,14 @@ public class BroadcastSystem {
 		return false;
 	}
 	
-	public static int checkNumFarmers(RobotController rc, boolean migrated){
+	public static int checkNumFarmers(RobotController rc, boolean migrating){
 		try{
-			int count = rc.readBroadcast(MIGRATED_FARMERS);
-			if(migrated){
-				rc.broadcast(MIGRATED_FARMERS, count+1);
+			int count = rc.readBroadcast(MIGRATED_COUNTER);
+			if(!migrating){
+				rc.broadcast(MIGRATED_COUNTER, count+1);
 			}else{
-				int num = rc.readBroadcast(ON_HOLD_FARMERS);
-				rc.broadcast(ON_HOLD_FARMERS, num+1);
+				int num = rc.readBroadcast(ON_HOLD_COUNTER);
+				rc.broadcast(ON_HOLD_COUNTER, num+1);
 			}
 			return count;
 		}catch(Exception e){
@@ -289,12 +306,62 @@ public class BroadcastSystem {
 		return -1;
 	}
 	
-	public static void resetNumFarmers(RobotController rc){
+	public static void countLumberjack(RobotController rc){
 		try{
-			rc.broadcast(MIGRATED_FARMERS, 0);
-			rc.broadcast(ON_HOLD_FARMERS, 0);
+			int count = rc.readBroadcast(LUMBERJACK_COUNTER);
+			rc.broadcast(LUMBERJACK_COUNTER, count+1);
 		}catch(Exception e){
-			System.out.println("[ERROR] Farmer Count Reset Failed");
+			System.out.println("[ERROR] Lumberjack Count Failed");
+		}
+	}
+	
+	public static int checkLumberjackCount(RobotController rc){
+		try{
+			return rc.readBroadcast(ALIVE_LUMBERJACKS);
+		}catch(Exception e){
+			System.out.println("[ERROR] Lumberjack Check Failed");
+		}
+		return 0;
+	}
+	
+	public static void countSoldier(RobotController rc){
+		try{
+			int count = rc.readBroadcast(SOLDIER_COUNTER);
+			rc.broadcast(SOLDIER_COUNTER, count+1);
+		}catch(Exception e){
+			System.out.println("[ERROR] Soldier Count Failed");
+		}
+	}
+	
+	public static int checkSoldier(RobotController rc){
+		try{
+			return rc.readBroadcast(ALIVE_SOLDIERS);
+		}catch(Exception e){
+			System.out.println("[ERROR] Soldier Check Failed");
+		}
+		return 0;
+	}
+	
+	public static void resetUnitCount(RobotController rc){
+		try{
+			rc.broadcast(MIGRATED_FARMERS, rc.readBroadcast(MIGRATED_COUNTER));
+			rc.broadcast(ON_HOLD_FARMERS, rc.readBroadcast(ON_HOLD_COUNTER));
+			rc.broadcast(MIGRATED_COUNTER, 0);
+			rc.broadcast(ON_HOLD_COUNTER, 0);
+			rc.broadcast(ALIVE_LUMBERJACKS, rc.readBroadcast(LUMBERJACK_COUNTER));
+			rc.broadcast(ALIVE_SOLDIERS, rc.readBroadcast(SOLDIER_COUNTER));
+			rc.broadcast(LUMBERJACK_COUNTER, 0);
+			rc.broadcast(SOLDIER_COUNTER, 0);
+		}catch(Exception e){
+			System.out.println("[ERROR] UNIT Count Reset Failed");
+		}
+	}
+	
+	public static void archonBuilding(RobotController rc){
+		try{
+			rc.broadcast(ON_HOLD_FARMERS, rc.readBroadcast(ON_HOLD_FARMERS)+1);
+		}catch(Exception e){
+			System.out.println("[ERROR] Archon Override Failed");
 		}
 	}
 	
@@ -403,18 +470,6 @@ public class BroadcastSystem {
 		return null;
 	}
 	
-	public static boolean allOrNothing(RobotController rc){
-		try{
-			if(rc.getRoundNum()>Gardener_Building.ALL_OR_NOTHING && rc.readBroadcast(MIGRATED_FARMERS)>2){
-				return true;
-			}
-			return false;
-		}catch(Exception e){
-			System.out.println("[ERROR] All Or Nothing Check Failed");
-		}
-		return false;
-	}
-	
 	public static int pairLumberGarden(RobotController rc, RobotType type){
 		try{
 			if(type == RobotType.GARDENER){
@@ -439,5 +494,17 @@ public class BroadcastSystem {
 			System.out.println("[ERROR] Lumberjack Gardener Pairing Failed");
 		}
 		return -1;
+	}
+	
+	public static int setLumberjackScatter(RobotController rc, boolean inRange){
+		try {
+			if(inRange){
+				rc.broadcast(LUMBERJACK_SCATTER, 1);
+			}
+			return rc.readBroadcast(LUMBERJACK_SCATTER);
+		} catch (GameActionException e) {
+			System.out.println("[ERROR] Lumberjack Scatter Failed");
+		}
+		return 0;
 	}
 }

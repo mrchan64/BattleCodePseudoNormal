@@ -6,9 +6,10 @@ import battlecode.common.*;
 public class Gardener {
 	
 	RobotController rc;
+	Head head;
 	RobotType type = RobotType.GARDENER;
 	float stride, body;
-	int numFarmers;
+	int numLumberjacks, numSoldiers;
 	TreeInfo[] ti;
 	RobotInfo[] ri;
 	Direction general;
@@ -23,9 +24,13 @@ public class Gardener {
 	MapLocation allyLocation;
 	Direction[] buildDir = null;
 	RobotType lastBuild = null;
+	int buildPhase = 0;
+	
+	public final int MAX_LUMBERJACKS = 10;
 	
 	public Gardener(RobotController rc){
 		this.rc = rc;
+		head = new Head(rc);
 		stride = type.strideRadius;
 		body = type.bodyRadius;
 	}
@@ -39,7 +44,6 @@ public class Gardener {
 	
 	public void firstTurn(){
 		setGeneral();
-		Clock.yield();
 	}
 	
 	public void turn(){
@@ -47,8 +51,11 @@ public class Gardener {
 			here = rc.getLocation();
 			ti = rc.senseNearbyTrees();
 			ri = rc.senseNearbyRobots();
+			numLumberjacks = BroadcastSystem.checkLumberjackCount(rc);
+			numSoldiers = BroadcastSystem.checkSoldier(rc);
 			int[] arr = BroadcastSystem.readEnemyLocation(rc);
 			enemyLocation = new MapLocation(arr[0], arr[1]);
+			head.runHead();
 			if(migrating){
 				findSettle();
 			}else{
@@ -290,16 +297,78 @@ public class Gardener {
 	}
 	
 	public void buildTurn(){
+		if(rc.getRoundNum()<500 || numLumberjacks < MAX_LUMBERJACKS){
+			buildLogic1();
+		}else if(rc.getRoundNum()<750){
+			buildLogic2();
+		}else{
+			buildLogic3();
+		}
+		//need another statement for building tanks and soldiers only
+		
+		try{
+			for(int i = 0; i<ti.length; i++){
+				if(ti[i].maxHealth-ti[i].health >= GameConstants.WATER_HEALTH_REGEN_RATE){
+					if(rc.canWater(ti[i].ID)){
+						rc.water(ti[i].ID);
+						break;
+					}
+				}
+			}
+		}catch(Exception e){
+			System.out.println("[Error] Attempt to water failed");
+		}
+		
+		if(buildPhase>=2)return;
+		
+		for(int i = 1; i<buildDir.length; i++){
+			if(rc.canPlantTree(buildDir[i])){
+				try{
+					rc.plantTree(buildDir[i]);
+					buildPhase++;
+				}catch(Exception e){
+					System.out.println("[ERROR] Calculation Tree Plant Off");
+				}
+			}
+		}
+	}
+	
+	public void buildLogic1(){
 		if(lastBuild == RobotType.SOLDIER || lastBuild == null){
 			if(rc.canBuildRobot(RobotType.LUMBERJACK, buildDir[0])){
 				try{
 					rc.buildRobot(RobotType.LUMBERJACK, buildDir[0]);
 					lastBuild = RobotType.LUMBERJACK;
+					buildPhase = 0;
 				}catch(Exception e){
 					System.out.println("[ERROR] Calculation Lumberjack Build Off");
 				}
 			}
 		}else if(lastBuild == RobotType.LUMBERJACK){
+			if(rc.canBuildRobot(RobotType.SCOUT, buildDir[0])){
+				try{
+					rc.buildRobot(RobotType.SCOUT, buildDir[0]);
+					lastBuild = RobotType.SCOUT;
+					buildPhase = 0;
+				}catch(Exception e){
+					System.out.println("[ERROR] Calculation Scout Build Off");
+				}
+			}
+		}else if(lastBuild == RobotType.SCOUT){
+			if(rc.canBuildRobot(RobotType.SOLDIER, buildDir[0])){
+				try{
+					rc.buildRobot(RobotType.SOLDIER, buildDir[0]);
+					lastBuild = RobotType.SOLDIER;
+					buildPhase = 0;
+				}catch(Exception e){
+					System.out.println("[ERROR] Calculation Soldier Build Off");
+				}
+			}
+		}
+	}
+	
+	public void buildLogic2(){
+		if(lastBuild == RobotType.SOLDIER || lastBuild == RobotType.LUMBERJACK){
 			if(rc.canBuildRobot(RobotType.SCOUT, buildDir[0])){
 				try{
 					rc.buildRobot(RobotType.SCOUT, buildDir[0]);
@@ -318,28 +387,15 @@ public class Gardener {
 				}
 			}
 		}
-		
-		for(int i = 1; i<buildDir.length; i++){
-			if(rc.canPlantTree(buildDir[i])){
-				try{
-					rc.plantTree(buildDir[i]);
-				}catch(Exception e){
-					System.out.println("[ERROR] Calculation Tree Plant Off");
-				}
+	}
+	public void buildLogic3(){
+		if(rc.canBuildRobot(RobotType.SOLDIER, buildDir[0])){
+			try{
+				rc.buildRobot(RobotType.SOLDIER, buildDir[0]);
+				lastBuild = RobotType.SOLDIER;
+			}catch(Exception e){
+				System.out.println("[ERROR] Calculation Soldier Build Off");
 			}
-		}
-		
-		try{
-			for(int i = 0; i<ti.length; i++){
-				if(ti[i].maxHealth-ti[i].health >= GameConstants.WATER_HEALTH_REGEN_RATE){
-					if(rc.canWater(ti[i].ID)){
-						rc.water(ti[i].ID);
-						break;
-					}
-				}
-			}
-		}catch(Exception e){
-			System.out.println("[Error] Attempt to water failed");
 		}
 	}
 	

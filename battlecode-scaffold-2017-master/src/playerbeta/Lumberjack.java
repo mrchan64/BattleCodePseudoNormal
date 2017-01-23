@@ -13,11 +13,14 @@ public class Lumberjack {
 	Direction general;
 	MapLocation here;
 	MapLocation enemyLocation;
+	Direction scatterDir;
+	int scatterMultiplier = 0;
 	
 	public Lumberjack(RobotController rc){
 		this.rc = rc;
 		stride = type.strideRadius;
 		body = type.bodyRadius;
+		scatterDir = new Direction((float)(Math.random()*Math.PI*2));
 	}
 	
 	public void go(){
@@ -28,12 +31,14 @@ public class Lumberjack {
 	
 	public void turn(){
 		try{
+			BroadcastSystem.countLumberjack(rc);
 			here = rc.getLocation();
 			ti = rc.senseNearbyTrees();
 			ri = rc.senseNearbyRobots();
 			int[] arr = BroadcastSystem.readEnemyLocation(rc);
 			enemyLocation = new MapLocation(arr[0], arr[1]);
 			general = here.directionTo(enemyLocation);
+			scatterForm();
 			if(!targetTrees()){
 				moveTowards();
 			}
@@ -64,6 +69,8 @@ public class Lumberjack {
 		try{
 			if(rc.canMove(general)){
 				rc.move(general);
+			}else{
+				scatterMultiplier++;
 			}
 		}catch(Exception e){
 			System.out.println("[ERROR] Tried to move");
@@ -185,5 +192,12 @@ public class Lumberjack {
 			}
 		}
 		return false;
+	}
+	
+	public void scatterForm(){
+		boolean inRange = here.distanceTo(enemyLocation)<stride;
+		if(BroadcastSystem.setLumberjackScatter(rc, inRange)==1){
+			general = scatterDir.rotateLeftRads((float)Math.PI/3*2*scatterMultiplier);
+		}
 	}
 }
