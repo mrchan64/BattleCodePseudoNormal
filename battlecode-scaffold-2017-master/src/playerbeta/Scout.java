@@ -7,8 +7,6 @@ public class Scout {
 	
 	RobotController rc;
 	RobotType type = RobotType.SCOUT;
-	final float berth = .06141592654F;
-	final float kiteMultiplier = .8F;
 	int scoutingTurns = 0;
 	boolean cantMove = false;
 	float scoutingDir;
@@ -20,8 +18,8 @@ public class Scout {
 	int generalThreat;
 	int generalID;
 	RobotInfo[] ri;
-	Slice[] allies;
 	boolean uploadEnemy;
+	BodyInfo target;
 	
 	public Scout(RobotController rc){
 		this.rc = rc;
@@ -53,7 +51,6 @@ public class Scout {
 			general = here.directionTo(enemylocation);
 			shooting = null;
 			uploadEnemy = false;
-			if(!efficient)allies = detectAllies();
 			moveTowards();
 			if(uploadEnemy){
 				BroadcastSystem.sendEnemyLocation(rc, enemylocation, generalThreat, generalID);
@@ -62,8 +59,9 @@ public class Scout {
 					BroadcastSystem.sendInRange(rc);
 				}
 			}
-			if(shooting != null && rc.canFireSingleShot()){
-				rc.fireSingleShot(rc.getLocation().directionTo(shooting));
+			here = rc.getLocation();
+			if(shooting != null && rc.canFireSingleShot() && !allyBetween()){
+				rc.fireSingleShot(here.directionTo(shooting));
 			}
 			Clock.yield();
 		}catch(Exception e){
@@ -138,49 +136,17 @@ public class Scout {
 		float b = ri.getType().strideRadius;
 		float c = here.distanceTo(ri.location);
 		float d = (float)Math.sqrt((a*a+b*b-c*c)/2);
-		float beta = (float) (Math.PI-Math.asin(d/a)) * kiteMultiplier;
+		float beta = (float) (Math.PI-Math.asin(d/a)) * PlayerConstants.KITE_MULTIPLIER;
 		general.rotateRightRads((float) (Math.PI+beta));
 	}
 	
-	public Slice[] detectAllies(){
-		Slice[] unavailable = null;
-		for(int i = 0; i<ri.length; i++){
-			if(ri[i].team != rc.getTeam()){
-				continue;
-			}
-			float half = (float) Math.asin(ri[i].getRadius()/here.distanceTo(ri[i].location));
-			float middle = here.directionTo(ri[i].location).radians;
-			Slice cone = new Slice(new Direction(middle+half), new Direction(middle-half));
-			if(unavailable == null){
-				unavailable = new Slice[1];
-				unavailable[0] = cone;
-			}else{
-				Slice[] newSet = new Slice[unavailable.length+1];
-				for(int j = 0; j<unavailable.length; i++){
-					newSet[j+1] = unavailable[j];
-				}
-				newSet[0] = cone;
-				unavailable = newSet;
-			}
-		}
-		if(unavailable == null)unavailable = new Slice[0];
-		
-		for(int i = 0; i<unavailable.length; i++){
-			for(int j = i+1; j<unavailable.length; j++){
-				if(unavailable[i].add(unavailable[j])){
-					unavailable = remove(unavailable, j);
-					j = i+1;
-				}
-			}
-		}
-		return unavailable;
-	}
-	
-	public boolean allyBetween(Direction dir){
-		for(int i = 0; i<allies.length;i++){
-			if(allies[i].contains(dir)){
-				return true;
-			}
+	public boolean allyBetween(){
+		if(here.distanceTo(target.getLocation())<PlayerConstants.CLOSENESS_MARGIN + target.getRadius()*PlayerConstants.CLOSENESS_MULTIPLIER)return false;
+		for(int i = 0; i<ri.length;i++){
+			if(ri[i].team != rc.getTeam())continue;
+			if(here.distanceTo(ri[i].location)>here.distanceTo(shooting))continue;
+			float theta = (float)Math.asin(ri[i].getRadius()/here.distanceTo(ri[i].location));
+			if(Math.abs(theta) > Math.abs(here.directionTo(ri[i].location).radiansBetween(here.directionTo(target.getLocation()))))return true;
 		}
 		return false;
 	}
@@ -204,39 +170,49 @@ public class Scout {
 		int targThreat = 0;
 		for(int i = 0; i<ri.length; i++){
 			if(ri[i].team != rc.getTeam()){
-				if(efficient || !allyBetween(here.directionTo(ri[i].location))){
+				if(efficient){
 					switch(ri[i].getType()){
 					case TANK:
 						if(targThreat<1){
 							targThreat = 1;
 							shooting = ri[i].location;
+							enemylocation = ri[i].location;
+							target = ri[i];
 						}
 					case LUMBERJACK:
 						if(targThreat<2){
 							targThreat = 2;
 							shooting = ri[i].location;
+							enemylocation = ri[i].location;
+							target = ri[i];
 						}
 					case SOLDIER:
 						if(targThreat<3){
 							targThreat = 3;
 							shooting = ri[i].location;
+							enemylocation = ri[i].location;
+							target = ri[i];
 						}
 					case SCOUT:
 						if(targThreat<4){
 							targThreat = 4;
 							shooting = ri[i].location;
+							enemylocation = ri[i].location;
+							target = ri[i];
 						}
 					case GARDENER:
 						if(targThreat<5){
 							targThreat = 5;
 							shooting = ri[i].location;
 							enemylocation = ri[i].location;
+							target = ri[i];
 						}
 					case ARCHON:
 						if(targThreat<6){
 							targThreat = 6;
 							shooting = ri[i].location;
 							enemylocation = ri[i].location;
+							target = ri[i];
 						}
 					}
 					if(targThreat>generalThreat){
@@ -287,7 +263,7 @@ public class Scout {
 		MapLocation origin = new MapLocation(0,0);
 		MapLocation point = new MapLocation(stride,body);
 		
-		float beta = origin.directionTo(point).radians+berth;
+		float beta = origin.directionTo(point).radians+PlayerConstants.BERTH;
 		float oa = origin.distanceTo(point);
 		
 		for(int i = 0; i<bi.length; i++){
@@ -387,7 +363,7 @@ public class Scout {
 		MapLocation origin = new MapLocation(0,0);
 		MapLocation point = new MapLocation(stride,body);
 		
-		float beta = origin.directionTo(point).radians+berth;
+		float beta = origin.directionTo(point).radians+PlayerConstants.BERTH;
 		
 		for(int i = 0; i<bi.length; i++){
 			MapLocation endpoint1 = bi[i].getLocation();

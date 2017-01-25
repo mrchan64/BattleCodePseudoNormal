@@ -56,8 +56,6 @@ public class Lumberjack {
 		}
 		
 		avoid = detectWallDir(avoid);
-		
-		Direction other = null;
 
 		for(int i = 0; i<avoid.length; i++){
 			if(avoid[i].contains(general)){
@@ -100,16 +98,16 @@ public class Lumberjack {
 		
 		if(east != null && !rc.canMove(east)){
 			BroadcastSystem.setWall(rc, here.x+body, "EAST");
-			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(east.rotateLeftRads((float)Math.PI/2), east.rotateRightDegrees((float)Math.PI/2))});
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(east.rotateLeftRads((float)Math.PI/2), east.rotateRightRads((float)Math.PI/2))});
 		}else if(west != null && !rc.canMove(west)){
 			BroadcastSystem.setWall(rc, here.x-body, "WEST");
-			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(west.rotateLeftRads((float)Math.PI/2), west.rotateRightDegrees((float)Math.PI/2))});
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(west.rotateLeftRads((float)Math.PI/2), west.rotateRightRads((float)Math.PI/2))});
 		}else if(north != null && !rc.canMove(north)){
 			BroadcastSystem.setWall(rc, here.y+body, "NORTH");
-			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(north.rotateLeftRads((float)Math.PI/2), north.rotateRightDegrees((float)Math.PI/2))});
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(north.rotateLeftRads((float)Math.PI/2), north.rotateRightRads((float)Math.PI/2))});
 		}else if(south != null && !rc.canMove(south)){
 			BroadcastSystem.setWall(rc, here.y-body, "SOUTH");
-			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(south.rotateLeftRads((float)Math.PI/2), south.rotateRightDegrees((float)Math.PI/2))});
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(south.rotateLeftRads((float)Math.PI/2), south.rotateRightRads((float)Math.PI/2))});
 		}
 		return Slice.simplify(unavailable);
 	}

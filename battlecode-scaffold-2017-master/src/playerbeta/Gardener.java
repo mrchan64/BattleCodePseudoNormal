@@ -17,22 +17,20 @@ public class Gardener {
 	MapLocation here;
 	MapLocation enemyLocation;
 	
-	float distGardener = 8F;
-	float distArchon = 7F;
-	float plantRad = .521F;
 	boolean migrating = true;
 	MapLocation allyLocation;
 	Direction[] buildDir = null;
 	RobotType lastBuild = null;
 	int buildPhase = 0;
 	
-	public final int MAX_LUMBERJACKS = 10;
+	MapLocation[] previousLoc;
 	
 	public Gardener(RobotController rc){
 		this.rc = rc;
 		head = new Head(rc);
 		stride = type.strideRadius;
 		body = type.bodyRadius;
+		previousLoc = new MapLocation[PlayerConstants.PREVIOUS_LOC_NUM];
 	}
 	
 	public void go(){
@@ -56,13 +54,17 @@ public class Gardener {
 			int[] arr = BroadcastSystem.readEnemyLocation(rc);
 			enemyLocation = new MapLocation(arr[0], arr[1]);
 			head.runHead();
+			BroadcastSystem.checkNumFarmers(rc, migrating);
 			if(migrating){
-				findSettle();
+				if(checkStuck()){
+					migrating = false;
+				}else{
+					findSettle();
+				}
 			}else{
 				initDirs();
 				buildTurn();
 			}
-			BroadcastSystem.checkNumFarmers(rc, migrating);
 			Clock.yield();
 		}catch(Exception e){
 			System.out.println("[ERROR] Turn could not happen");
@@ -128,8 +130,6 @@ public class Gardener {
 		}
 		
 		avoid = detectWallDir(avoid);
-		
-		Direction other = null;
 
 		for(int i = 0; i<avoid.length; i++){
 			if(avoid[i].contains(general)){
@@ -170,16 +170,18 @@ public class Gardener {
 		
 		if(east != null && !rc.canMove(east)){
 			BroadcastSystem.setWall(rc, here.x+body, "EAST");
-			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(east.rotateLeftRads((float)Math.PI/2), east.rotateRightDegrees((float)Math.PI/2))});
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(east.rotateLeftRads((float)Math.PI/2), east.rotateRightRads((float)Math.PI/2))});
 		}else if(west != null && !rc.canMove(west)){
 			BroadcastSystem.setWall(rc, here.x-body, "WEST");
-			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(west.rotateLeftRads((float)Math.PI/2), west.rotateRightDegrees((float)Math.PI/2))});
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(west.rotateLeftRads((float)Math.PI/2), west.rotateRightRads((float)Math.PI/2))});
 		}else if(north != null && !rc.canMove(north)){
+			System.out.println("North");
 			BroadcastSystem.setWall(rc, here.y+body, "NORTH");
-			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(north.rotateLeftRads((float)Math.PI/2), north.rotateRightDegrees((float)Math.PI/2))});
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(north.rotateLeftRads((float)Math.PI/2), north.rotateRightRads((float)Math.PI/2))});
+			System.out.println("Open "+unavailable[0].open+" "+unavailable[0].close+" "+unavailable[0].concave);
 		}else if(south != null && !rc.canMove(south)){
 			BroadcastSystem.setWall(rc, here.y-body, "SOUTH");
-			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(south.rotateLeftRads((float)Math.PI/2), south.rotateRightDegrees((float)Math.PI/2))});
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(south.rotateLeftRads((float)Math.PI/2), south.rotateRightRads((float)Math.PI/2))});
 		}
 		return Slice.simplify(unavailable);
 	}
@@ -276,11 +278,11 @@ public class Gardener {
 			if(ri[i].getTeam() != rc.getTeam())continue;
 			float vectMag = 0;
 			Direction vectRad = new Direction(0);
-			if(ri[i].type == RobotType.GARDENER && here.distanceTo(ri[i].location) < distGardener){
-				vectMag = distGardener - here.distanceTo(ri[i].location);
+			if(ri[i].type == RobotType.GARDENER && here.distanceTo(ri[i].location) < PlayerConstants.DIST_GARDENER){
+				vectMag = PlayerConstants.DIST_GARDENER - here.distanceTo(ri[i].location);
 				vectRad = ri[i].location.directionTo(here);
-			}else if(ri[i].type == RobotType.ARCHON && here.distanceTo(ri[i].location) < distArchon){
-				vectMag = distArchon - here.distanceTo(ri[i].location);
+			}else if(ri[i].type == RobotType.ARCHON && here.distanceTo(ri[i].location) < PlayerConstants.DIST_ARCHON){
+				vectMag = PlayerConstants.DIST_ARCHON - here.distanceTo(ri[i].location);
 				vectRad = ri[i].location.directionTo(here);
 			}
 			moveVect = moveVect.add(vectRad, vectMag);
@@ -297,9 +299,9 @@ public class Gardener {
 	}
 	
 	public void buildTurn(){
-		if(rc.getRoundNum()<500 || numLumberjacks < MAX_LUMBERJACKS){
+		if(rc.getRoundNum()<PlayerConstants.NEED_LUMBERJACKS_TURN || numLumberjacks < PlayerConstants.MAX_LUMBERJACKS){
 			buildLogic1();
-		}else if(rc.getRoundNum()<750){
+		}else if(rc.getRoundNum()<PlayerConstants.NEED_SCOUTS_TURN){
 			buildLogic2();
 		}else{
 			buildLogic3();
@@ -403,14 +405,18 @@ public class Gardener {
 		if(buildDir != null)return;
 		
 		Slice[] avoid = Slice.combine(detectObstacles(), detectTrees());
-		
+		avoid = detectWallDir(avoid);
+		System.out.println("Avoid "+avoid.length);
+
 		Direction buildZero = here.directionTo(enemyLocation);
+		System.out.println("Open "+avoid[0].open+avoid[0].close);
 		for(int i = 0; i<avoid.length; i++){
 			if(avoid[i].contains(buildZero)){
 				buildZero = avoid[i].round(buildZero);
 				break;
 			}
 		}
+		System.out.println("BuildZero "+buildZero);
 		
 		buildDir = new Direction[6];
 		for(int i = 0; i<6; i++){
@@ -421,12 +427,12 @@ public class Gardener {
 	public Slice[] detectObstacles(){
 		Slice[] unavailable = null;
 		for(int i = 0; i<ri.length; i++){
-			if(here.distanceTo(ri[i].location) > ri[i].getRadius()+1.01F){
+			if(here.distanceTo(ri[i].location) > ri[i].getRadius()+PlayerConstants.PLANT_MARGIN){
 				continue;
 			}
 			float half = (float) Math.asin((ri[i].getRadius()+body)/here.distanceTo(ri[i].location));
 			float middle = here.directionTo(ri[i].location).radians;
-			Slice cone = new Slice(new Direction(middle+half+plantRad), new Direction(middle-half-plantRad));
+			Slice cone = new Slice(new Direction(middle+half+PlayerConstants.PLANT_RADIUS), new Direction(middle-half-PlayerConstants.PLANT_RADIUS));
 			if(unavailable == null){
 				unavailable = new Slice[1];
 				unavailable[0] = cone;
@@ -449,12 +455,13 @@ public class Gardener {
 		Slice[] unavailable = null;
 		TreeInfo[] ti = rc.senseNearbyTrees();
 		for(int i = 0; i<ti.length; i++){
-			if(here.distanceTo(ti[i].location) > ti[i].radius+1.01F){
+			System.out.println("Dist "+here.distanceTo(ti[i].location));
+			if(here.distanceTo(ti[i].location) > ti[i].radius+PlayerConstants.PLANT_MARGIN){
 				continue;
 			}
 			float half = (float) Math.asin((ti[i].radius+body)/here.distanceTo(ti[i].location));
 			float middle = here.directionTo(ti[i].location).radians;
-			Slice cone = new Slice(new Direction(middle+half+plantRad), new Direction(middle-half-plantRad));
+			Slice cone = new Slice(new Direction(middle+half+PlayerConstants.PLANT_RADIUS), new Direction(middle-half-PlayerConstants.PLANT_RADIUS));
 			if(unavailable == null){
 				unavailable = new Slice[1];
 				unavailable[0] = cone;
@@ -471,5 +478,19 @@ public class Gardener {
 		
 		unavailable = Slice.simplify(unavailable);
 		return unavailable;
+	}
+	
+	public boolean checkStuck(){
+		int total = 0;
+		for(int i = 0; i< previousLoc.length-1; i++){
+			previousLoc[i] = previousLoc[i+1];
+			if(previousLoc[i]==null)continue;
+			if(previousLoc[i].equals(here)){
+				total++;
+			}
+		}
+		previousLoc[previousLoc.length-1] = here;
+		total++;
+		return total >= PlayerConstants.CHECK_STUCK_NUM;
 	}
 }

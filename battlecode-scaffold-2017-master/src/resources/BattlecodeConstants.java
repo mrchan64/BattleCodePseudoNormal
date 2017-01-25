@@ -8,7 +8,7 @@ public class BattlecodeConstants {
 	}
 	
 	public static void printFields(){
-		java.lang.reflect.Field[] fields = GameConstants.class.getDeclaredFields();
+		/*java.lang.reflect.Field[] fields = GameConstants.class.getDeclaredFields();
 		GameConstants gc = null;
 		for(int i = 0; i<fields.length; i++){
 			System.out.print(fields[i].getName()+" = ");
@@ -17,7 +17,7 @@ public class BattlecodeConstants {
 			}catch(Exception e){
 				System.out.println("unable to access value");
 			}
-		}
+		}*/
 	}
 	
 }

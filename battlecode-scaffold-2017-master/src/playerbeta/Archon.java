@@ -47,7 +47,6 @@ public class Archon {
 			}else{
 				relativeSafety = BroadcastSystem.getRelativeSafety(rc);
 			}
-			System.out.println("Farm "+numFarmers+" "+numOnHold);
 			head.runHead();
 			attemptBuild();
 			checkBuilding();
@@ -90,9 +89,9 @@ public class Archon {
 	
 	public void attemptBuild(){
 		
-		if(!rc.isBuildReady() || rc.getTeamBullets() < RobotType.GARDENER.bulletCost + numFarmers * 25)return;
+		if(!rc.isBuildReady() || rc.getTeamBullets() < RobotType.GARDENER.bulletCost + numFarmers * PlayerConstants.BULLET_RESERVE_PER_GARDENER)return;
 		
-		if(rc.getRoundNum() < RobotPlayer.LIMIT_GARDENER_TURN && numOnHold >= RobotPlayer.MAX_ON_HOLD )return;
+		if(rc.getRoundNum() < PlayerConstants.LIMIT_GARDENER_TURN && numOnHold >= PlayerConstants.MAX_ON_HOLD )return;
 		
 		Direction buildDir = here.directionTo(relativeSafety);
 		Slice[] avoid = Slice.combine(detectObstacles(), detectTrees());

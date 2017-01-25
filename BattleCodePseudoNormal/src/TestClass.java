@@ -4,9 +4,8 @@ import java.util.Arrays;
 public class TestClass {
 
 	public static void main(String[] args) {
-		int i = 1;
-		int j = 3;
-		System.out.println(i/j);
+		System.out.println(Arrays.toString(args));
+		
 	}
 	
 	public static void remove(int[] arg){

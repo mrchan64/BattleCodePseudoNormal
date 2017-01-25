@@ -7,7 +7,6 @@ public class Soldier {
 	
 	RobotController rc;
 	RobotType type = RobotType.SOLDIER;
-	final float kiteMultiplier = .8F;
 	float stride, body;
 	MapLocation enemylocation;
 	MapLocation here;
@@ -19,12 +18,16 @@ public class Soldier {
 	TreeInfo[] ti;
 	Slice[] allies;
 	boolean uploadEnemy;
+	BodyInfo target;
+
+	MapLocation[] previousLoc;
 	
 	public Soldier(RobotController rc){
 		this.rc = rc;
 		enemylocation = new MapLocation(22, 500);
 		stride = type.strideRadius;
 		body = type.bodyRadius;
+		previousLoc = new MapLocation[PlayerConstants.PREVIOUS_LOC_NUM];
 	}
 	
 	public void go(){
@@ -45,16 +48,19 @@ public class Soldier {
 			general = here.directionTo(enemylocation);
 			shooting = null;
 			uploadEnemy = false;
+			if(checkStuck()){
+				shootAtTree();
+			}
 			moveTowards();
+			if(shooting != null && rc.canFireTriadShot() && !allyBetween()){
+				rc.fireTriadShot(rc.getLocation().directionTo(shooting));
+			}
 			if(uploadEnemy){
 				BroadcastSystem.sendEnemyLocation(rc, enemylocation, generalThreat, generalID);
 			}else{
 				if(here.distanceTo(enemylocation)<=stride){
 					BroadcastSystem.sendInRange(rc);
 				}
-			}
-			if(shooting != null && rc.canFireTriadShot()){
-				rc.fireTriadShot(rc.getLocation().directionTo(shooting));
 			}
 			BroadcastSystem.countSoldier(rc);
 			Clock.yield();
@@ -93,7 +99,7 @@ public class Soldier {
 		float b = ri.getType().strideRadius;
 		float c = here.distanceTo(ri.location);
 		float d = (float)Math.sqrt((a*a+b*b-c*c)/2);
-		float beta = (float) (Math.PI-Math.asin(d/a)) * kiteMultiplier;
+		float beta = (float) (Math.PI-Math.asin(d/a)) * PlayerConstants.KITE_MULTIPLIER;
 		general.rotateRightRads((float) (Math.PI+beta));
 	}
 	
@@ -124,15 +130,6 @@ public class Soldier {
 		return unavailable;
 	}
 	
-	public boolean allyBetween(Direction dir){
-		for(int i = 0; i<allies.length;i++){
-			if(allies[i].contains(dir)){
-				return true;
-			}
-		}
-		return false;
-	}
-	
 	public void shakeTrees(){
 		TreeInfo[] ti = rc.senseNearbyTrees();
 		for(int i = 0; i<ti.length; i++){
@@ -152,39 +149,45 @@ public class Soldier {
 		int targThreat = 0;
 		for(int i = 0; i<ri.length; i++){
 			if(ri[i].team != rc.getTeam()){
-				if(efficient || !allyBetween(here.directionTo(ri[i].location))){
+				if(efficient){
 					switch(ri[i].getType()){
 					case TANK:
 						if(targThreat<1){
 							targThreat = 1;
 							shooting = ri[i].location;
+							target = ri[i];
 						}
 					case LUMBERJACK:
 						if(targThreat<2){
 							targThreat = 2;
 							shooting = ri[i].location;
+							target = ri[i];
 						}
 					case SOLDIER:
 						if(targThreat<3){
 							targThreat = 3;
 							shooting = ri[i].location;
+							target = ri[i];
 						}
 					case SCOUT:
 						if(targThreat<4){
 							targThreat = 4;
 							shooting = ri[i].location;
+							target = ri[i];
 						}
 					case GARDENER:
 						if(targThreat<5){
 							targThreat = 5;
 							shooting = ri[i].location;
 							enemylocation = ri[i].location;
+							target = ri[i];
 						}
 					case ARCHON:
 						if(targThreat<6){
 							targThreat = 6;
 							shooting = ri[i].location;
 							enemylocation = ri[i].location;
+							target = ri[i];
 						}
 					}
 					if(targThreat>generalThreat){
@@ -245,5 +248,83 @@ public class Soldier {
 		
 		unavailable = Slice.simplify(unavailable);
 		return unavailable;
+	}
+	
+	public boolean checkStuck(){
+		int total = 0;
+		for(int i = 0; i< previousLoc.length-1; i++){
+			previousLoc[i] = previousLoc[i+1];
+			if(previousLoc[i]==null)continue;
+			if(previousLoc[i].equals(here)){
+				total++;
+			}
+		}
+		previousLoc[previousLoc.length-1] = here;
+		total++;
+		return total >= PlayerConstants.CHECK_STUCK_NUM;
+	}
+	
+	public void shootAtTree(){
+		for(int i = 0; i<ti.length; i++){
+			if(ti[i].getTeam() == Team.NEUTRAL){
+				target = ti[i];
+				shooting = ti[i].location;
+				if(shooting != null && rc.canFireSingleShot() && !allyBetween()){
+					try {
+						rc.fireSingleShot(rc.getLocation().directionTo(shooting));
+					} catch (GameActionException e) {
+						System.out.println("[ERROR] Can't Shoot There");
+					}
+				}
+			}
+		}
+	}
+	
+	public boolean allyBetween(){
+		if(here.distanceTo(target.getLocation())<PlayerConstants.CLOSENESS_MARGIN + target.getRadius()*PlayerConstants.CLOSENESS_MULTIPLIER)return false;
+		for(int i = 0; i<ri.length;i++){
+			if(ri[i].team != rc.getTeam())continue;
+			if(here.distanceTo(ri[i].location)>here.distanceTo(shooting))continue;
+			float theta = (float)Math.asin(ri[i].getRadius()/here.distanceTo(ri[i].location));
+			if(Math.abs(theta)+PlayerConstants.ALLY_BETWEEN_MARGIN > Math.abs(here.directionTo(ri[i].location).radiansBetween(here.directionTo(target.getLocation()))))return true;
+		}
+		return false;
+	}
+	
+	public Slice[] detectWallDir(Slice[] unavailable){
+		Direction east = new Direction(0);
+		Direction west = new Direction((float)Math.PI);
+		Direction north = new Direction((float)Math.PI/2);
+		Direction south = new Direction(-1*(float)Math.PI/2);
+		
+		for(int i = 0; i<unavailable.length; i++){
+			if(east != null && unavailable[i].contains(east)){
+				east = null;
+			}
+			if(west != null && unavailable[i].contains(west)){
+				west = null;
+			}
+			if(north != null && unavailable[i].contains(north)){
+				north = null;
+			}
+			if(south != null && unavailable[i].contains(south)){
+				south = null;
+			}
+		}
+		
+		if(east != null && !rc.canMove(east)){
+			BroadcastSystem.setWall(rc, here.x+body, "EAST");
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(east.rotateLeftRads((float)Math.PI/2), east.rotateRightRads((float)Math.PI/2))});
+		}else if(west != null && !rc.canMove(west)){
+			BroadcastSystem.setWall(rc, here.x-body, "WEST");
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(west.rotateLeftRads((float)Math.PI/2), west.rotateRightRads((float)Math.PI/2))});
+		}else if(north != null && !rc.canMove(north)){
+			BroadcastSystem.setWall(rc, here.y+body, "NORTH");
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(north.rotateLeftRads((float)Math.PI/2), north.rotateRightRads((float)Math.PI/2))});
+		}else if(south != null && !rc.canMove(south)){
+			BroadcastSystem.setWall(rc, here.y-body, "SOUTH");
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(south.rotateLeftRads((float)Math.PI/2), south.rotateRightRads((float)Math.PI/2))});
+		}
+		return Slice.simplify(unavailable);
 	}
 }
