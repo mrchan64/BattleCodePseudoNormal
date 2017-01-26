@@ -15,12 +15,19 @@ public class Lumberjack {
 	MapLocation enemyLocation;
 	Direction scatterDir;
 	int scatterMultiplier = 0;
+	int stuckCountdown = 0;
+	int generalThreat;
+	int generalID;
+	boolean uploadEnemy;
+	
+	MapLocation[] previousLoc;
 	
 	public Lumberjack(RobotController rc){
 		this.rc = rc;
 		stride = type.strideRadius;
 		body = type.bodyRadius;
 		scatterDir = new Direction((float)(Math.random()*Math.PI*2));
+		previousLoc = new MapLocation[PlayerConstants.PREVIOUS_LOC_NUM];
 	}
 	
 	public void go(){
@@ -38,10 +45,28 @@ public class Lumberjack {
 			int[] arr = BroadcastSystem.readEnemyLocation(rc);
 			enemyLocation = new MapLocation(arr[0], arr[1]);
 			general = here.directionTo(enemyLocation);
-			scatterForm();
-			if(!targetTrees()){
+			if(stuckCountdown <=0 ){
+				scatterForm();
+				if(!targetTrees()){
+					moveTowards();
+					if(checkStuck()){
+						stuckCountdown = 10;
+					}
+				}
+			}else{
 				moveTowards();
+				stuckCountdown--;
 			}
+			uploadEnemy = false;
+			detectEnemies();
+			if(uploadEnemy){
+				BroadcastSystem.sendEnemyLocation(rc, enemyLocation, generalThreat, generalID);
+			}else{
+				if(here.distanceTo(enemyLocation)<=stride){
+					BroadcastSystem.sendInRange(rc);
+				}
+			}
+			attackEnemies();
 			Clock.yield();
 		}catch(Exception e){
 			System.out.println("[ERROR] Turn could not happen");
@@ -170,7 +195,7 @@ public class Lumberjack {
 		TreeInfo closest = null;
 		float distance = Float.MAX_VALUE;
 		for(int i = 0; i<ti.length; i++){
-			if(ti[i].getTeam() != Team.NEUTRAL)continue;
+			if(ti[i].getTeam() == rc.getTeam())continue;
 			float d = here.distanceTo(ti[i].location);
 			if(d<distance){
 				closest = ti[i];
@@ -196,6 +221,81 @@ public class Lumberjack {
 		boolean inRange = here.distanceTo(enemyLocation)<stride;
 		if(BroadcastSystem.setLumberjackScatter(rc, inRange)==1){
 			general = scatterDir.rotateLeftRads((float)Math.PI/3*2*scatterMultiplier);
+		}
+	}
+	
+	public boolean checkStuck(){
+		int total = 0;
+		for(int i = 0; i< previousLoc.length-1; i++){
+			previousLoc[i] = previousLoc[i+1];
+			if(previousLoc[i]==null)continue;
+			if(previousLoc[i].equals(here)){
+				total++;
+			}
+		}
+		previousLoc[previousLoc.length-1] = here;
+		total++;
+		return total >= PlayerConstants.CHECK_STUCK_NUM;
+	}
+	
+	public void attackEnemies(){
+		if(!rc.canStrike())return;
+		for(int i = 0; i<ri.length; i++){
+			if(ri[i].getTeam()==rc.getTeam())continue;
+			if(here.distanceTo(ri[i].location)<body+GameConstants.LUMBERJACK_STRIKE_RADIUS+ri[i].getRadius()){
+				try {
+					rc.strike();
+					break;
+				} catch (GameActionException e) {
+					System.out.println("[ERROR] Couldn't strike");
+				}
+			}
+		}
+	}
+	
+	public void detectEnemies(){
+		int targThreat = 0;
+		for(int i = 0; i<ri.length; i++){
+			if(ri[i].team != rc.getTeam()){
+				switch(ri[i].getType()){
+				case TANK:
+					if(targThreat<1){
+						targThreat = 1;
+						enemyLocation = ri[i].location;
+					}
+				case LUMBERJACK:
+					if(targThreat<2){
+						targThreat = 2;
+						enemyLocation = ri[i].location;
+					}
+				case SOLDIER:
+					if(targThreat<3){
+						targThreat = 3;
+						enemyLocation = ri[i].location;
+					}
+				case SCOUT:
+					if(targThreat<4){
+						targThreat = 4;
+						enemyLocation = ri[i].location;
+					}
+				case GARDENER:
+					if(targThreat<5){
+						targThreat = 5;
+						enemyLocation = ri[i].location;
+					}
+				case ARCHON:
+					if(targThreat<6){
+						targThreat = 6;
+						enemyLocation = ri[i].location;
+					}
+				}
+				if(targThreat>generalThreat){
+					enemyLocation = ri[i].location;
+					generalID = ri[i].ID;
+					generalThreat = targThreat;
+					uploadEnemy = true;
+				}
+			}
 		}
 	}
 }

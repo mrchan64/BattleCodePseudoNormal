@@ -22,6 +22,9 @@ public class Gardener {
 	Direction[] buildDir = null;
 	RobotType lastBuild = null;
 	int buildPhase = 0;
+	int treesBuilt = 0;
+	int scoutsBuilt = 4;
+	int treeMultiplier = 1;
 	
 	MapLocation[] previousLoc;
 	
@@ -54,7 +57,7 @@ public class Gardener {
 			int[] arr = BroadcastSystem.readEnemyLocation(rc);
 			enemyLocation = new MapLocation(arr[0], arr[1]);
 			head.runHead();
-			BroadcastSystem.checkNumFarmers(rc, migrating);
+			BroadcastSystem.checkNumFarmers(rc, migrating || treesBuilt < 2);
 			if(migrating){
 				if(checkStuck()){
 					migrating = false;
@@ -169,19 +172,21 @@ public class Gardener {
 		}
 		
 		if(east != null && !rc.canMove(east)){
+			treeMultiplier = 2;
 			BroadcastSystem.setWall(rc, here.x+body, "EAST");
-			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(east.rotateLeftRads((float)Math.PI/2), east.rotateRightRads((float)Math.PI/2))});
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(east.rotateLeftRads((float)Math.PI/2+PlayerConstants.SOLDIER_EVADE_TREE), east.rotateRightRads((float)Math.PI/2+PlayerConstants.SOLDIER_EVADE_TREE))});
 		}else if(west != null && !rc.canMove(west)){
+			treeMultiplier = 2;
 			BroadcastSystem.setWall(rc, here.x-body, "WEST");
-			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(west.rotateLeftRads((float)Math.PI/2), west.rotateRightRads((float)Math.PI/2))});
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(west.rotateLeftRads((float)Math.PI/2+PlayerConstants.SOLDIER_EVADE_TREE), west.rotateRightRads((float)Math.PI/2+PlayerConstants.SOLDIER_EVADE_TREE))});
 		}else if(north != null && !rc.canMove(north)){
-			System.out.println("North");
+			treeMultiplier = 2;
 			BroadcastSystem.setWall(rc, here.y+body, "NORTH");
-			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(north.rotateLeftRads((float)Math.PI/2), north.rotateRightRads((float)Math.PI/2))});
-			System.out.println("Open "+unavailable[0].open+" "+unavailable[0].close+" "+unavailable[0].concave);
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(north.rotateLeftRads((float)Math.PI/2+PlayerConstants.SOLDIER_EVADE_TREE), north.rotateRightRads((float)Math.PI/2+PlayerConstants.SOLDIER_EVADE_TREE))});
 		}else if(south != null && !rc.canMove(south)){
+			treeMultiplier = 2;
 			BroadcastSystem.setWall(rc, here.y-body, "SOUTH");
-			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(south.rotateLeftRads((float)Math.PI/2), south.rotateRightRads((float)Math.PI/2))});
+			unavailable = Slice.combine(unavailable, new Slice[]{new Slice(south.rotateLeftRads((float)Math.PI/2+PlayerConstants.SOLDIER_EVADE_TREE), south.rotateRightRads((float)Math.PI/2+PlayerConstants.SOLDIER_EVADE_TREE))});
 		}
 		return Slice.simplify(unavailable);
 	}
@@ -299,13 +304,22 @@ public class Gardener {
 	}
 	
 	public void buildTurn(){
-		if(rc.getRoundNum()<PlayerConstants.NEED_LUMBERJACKS_TURN || numLumberjacks < PlayerConstants.MAX_LUMBERJACKS){
-			buildLogic1();
-		}else if(rc.getRoundNum()<PlayerConstants.NEED_SCOUTS_TURN){
-			buildLogic2();
+		boolean td = treeDense();
+		boolean cr = closeRange();
+		/*if(td){
+			if(cr){
+				buildLogic1();
+			}else{
+				buildLogic2();
+			}
 		}else{
-			buildLogic3();
-		}
+			if(cr){
+				buildLogic3();
+			}else{
+				buildLogic4();
+			}
+		}*/
+		buildLogic1();
 		//need another statement for building tanks and soldiers only
 		
 		try{
@@ -328,6 +342,7 @@ public class Gardener {
 				try{
 					rc.plantTree(buildDir[i]);
 					buildPhase++;
+					treesBuilt++;
 				}catch(Exception e){
 					System.out.println("[ERROR] Calculation Tree Plant Off");
 				}
@@ -335,8 +350,12 @@ public class Gardener {
 		}
 	}
 	
+	/**
+	 * Build Logic for close range and dense trees.
+	 * Lumberjack -> Soldier -> Scout
+	 */
 	public void buildLogic1(){
-		if(lastBuild == RobotType.SOLDIER || lastBuild == null){
+		if(lastBuild == RobotType.SCOUT || lastBuild == null){
 			if(rc.canBuildRobot(RobotType.LUMBERJACK, buildDir[0])){
 				try{
 					rc.buildRobot(RobotType.LUMBERJACK, buildDir[0]);
@@ -346,7 +365,7 @@ public class Gardener {
 					System.out.println("[ERROR] Calculation Lumberjack Build Off");
 				}
 			}
-		}else if(lastBuild == RobotType.LUMBERJACK){
+		}else if(lastBuild == RobotType.SOLDIER){
 			if(rc.canBuildRobot(RobotType.SCOUT, buildDir[0])){
 				try{
 					rc.buildRobot(RobotType.SCOUT, buildDir[0]);
@@ -356,7 +375,7 @@ public class Gardener {
 					System.out.println("[ERROR] Calculation Scout Build Off");
 				}
 			}
-		}else if(lastBuild == RobotType.SCOUT){
+		}else if(lastBuild == RobotType.LUMBERJACK){
 			if(rc.canBuildRobot(RobotType.SOLDIER, buildDir[0])){
 				try{
 					rc.buildRobot(RobotType.SOLDIER, buildDir[0]);
@@ -369,14 +388,77 @@ public class Gardener {
 		}
 	}
 	
+	/**
+	 * Build Logic for not close range and dense trees.
+	 * Lumberjack -> Scout
+	 */
 	public void buildLogic2(){
-		if(lastBuild == RobotType.SOLDIER || lastBuild == RobotType.LUMBERJACK){
+		if((lastBuild == RobotType.SCOUT && scoutsBuilt > 3) || lastBuild == null){
+			if(rc.canBuildRobot(RobotType.LUMBERJACK, buildDir[0])){
+				try{
+					rc.buildRobot(RobotType.LUMBERJACK, buildDir[0]);
+					lastBuild = RobotType.LUMBERJACK;
+					buildPhase = 0;
+					scoutsBuilt = 0;
+				}catch(Exception e){
+					System.out.println("[ERROR] Calculation Lumberjack Build Off");
+				}
+			}
+		}else{
 			if(rc.canBuildRobot(RobotType.SCOUT, buildDir[0])){
 				try{
 					rc.buildRobot(RobotType.SCOUT, buildDir[0]);
 					lastBuild = RobotType.SCOUT;
+					buildPhase = 0;
+					scoutsBuilt++;
 				}catch(Exception e){
 					System.out.println("[ERROR] Calculation Scout Build Off");
+				}
+			}
+		}
+	}
+	
+	/**
+	 * Build Logic for close range and sparse trees.
+	 * Soldier -> Scout
+	 */
+	public void buildLogic3(){
+		if(lastBuild == RobotType.LUMBERJACK || lastBuild == RobotType.SCOUT || lastBuild == null){
+			if(rc.canBuildRobot(RobotType.SOLDIER, buildDir[0])){
+				try{
+					rc.buildRobot(RobotType.SOLDIER, buildDir[0]);
+					lastBuild = RobotType.SOLDIER;
+					buildPhase = 0;
+				}catch(Exception e){
+					System.out.println("[ERROR] Calculation Lumberjack Build Off");
+				}
+			}
+		}else if(lastBuild == RobotType.SOLDIER){
+			if(rc.canBuildRobot(RobotType.SCOUT, buildDir[0])){
+				try{
+					rc.buildRobot(RobotType.SCOUT, buildDir[0]);
+					lastBuild = RobotType.SCOUT;
+					buildPhase = 0;
+				}catch(Exception e){
+					System.out.println("[ERROR] Calculation Scout Build Off");
+				}
+			}
+		}
+	}
+	
+	/**
+	 * Build Logic for not close range and sparse trees.
+	 * Scout -> Soldier
+	 */
+	public void buildLogic4(){
+		if(lastBuild == RobotType.LUMBERJACK || lastBuild == RobotType.SOLDIER || lastBuild == null){
+			if(rc.canBuildRobot(RobotType.SCOUT, buildDir[0])){
+				try{
+					rc.buildRobot(RobotType.SCOUT, buildDir[0]);
+					lastBuild = RobotType.SCOUT;
+					buildPhase = 0;
+				}catch(Exception e){
+					System.out.println("[ERROR] Calculation Lumberjack Build Off");
 				}
 			}
 		}else if(lastBuild == RobotType.SCOUT){
@@ -384,19 +466,10 @@ public class Gardener {
 				try{
 					rc.buildRobot(RobotType.SOLDIER, buildDir[0]);
 					lastBuild = RobotType.SOLDIER;
+					buildPhase = 0;
 				}catch(Exception e){
-					System.out.println("[ERROR] Calculation Soldier Build Off");
+					System.out.println("[ERROR] Calculation Scout Build Off");
 				}
-			}
-		}
-	}
-	public void buildLogic3(){
-		if(rc.canBuildRobot(RobotType.SOLDIER, buildDir[0])){
-			try{
-				rc.buildRobot(RobotType.SOLDIER, buildDir[0]);
-				lastBuild = RobotType.SOLDIER;
-			}catch(Exception e){
-				System.out.println("[ERROR] Calculation Soldier Build Off");
 			}
 		}
 	}
@@ -409,7 +482,6 @@ public class Gardener {
 		System.out.println("Avoid "+avoid.length);
 
 		Direction buildZero = here.directionTo(enemyLocation);
-		System.out.println("Open "+avoid[0].open+avoid[0].close);
 		for(int i = 0; i<avoid.length; i++){
 			if(avoid[i].contains(buildZero)){
 				buildZero = avoid[i].round(buildZero);
@@ -455,10 +527,10 @@ public class Gardener {
 		Slice[] unavailable = null;
 		TreeInfo[] ti = rc.senseNearbyTrees();
 		for(int i = 0; i<ti.length; i++){
-			System.out.println("Dist "+here.distanceTo(ti[i].location));
 			if(here.distanceTo(ti[i].location) > ti[i].radius+PlayerConstants.PLANT_MARGIN){
 				continue;
 			}
+			System.out.println("Dist "+here.distanceTo(ti[i].location)+" "+ti[i].ID);
 			float half = (float) Math.asin((ti[i].radius+body)/here.distanceTo(ti[i].location));
 			float middle = here.directionTo(ti[i].location).radians;
 			Slice cone = new Slice(new Direction(middle+half+PlayerConstants.PLANT_RADIUS), new Direction(middle-half-PlayerConstants.PLANT_RADIUS));
@@ -492,5 +564,21 @@ public class Gardener {
 		previousLoc[previousLoc.length-1] = here;
 		total++;
 		return total >= PlayerConstants.CHECK_STUCK_NUM;
+	}
+	
+	public boolean treeDense(){
+		float total = type.sensorRadius * type.sensorRadius * (float)Math.PI;
+		float trees = 0F;
+		for(int i = 0; i<ti.length; i++){
+			if(ti[i].getTeam()!=rc.getTeam()){
+				trees += ti[i].radius * ti[i].radius *(float)Math.PI;
+			}
+		}
+		System.out.println(trees*treeMultiplier/total);
+		return trees*treeMultiplier/total >= PlayerConstants.TREE_DENSITY_PERCENT;
+	}
+	
+	public boolean closeRange(){
+		return here.distanceTo(enemyLocation)<PlayerConstants.CLOSE_RANGE_MARGIN;
 	}
 }

@@ -2,11 +2,11 @@ package playerbeta;
 
 import battlecode.common.*;
 
-public class Soldier {
+public class Tank {
 	final boolean efficient = true;
 	
 	RobotController rc;
-	RobotType type = RobotType.SOLDIER;
+	RobotType type = RobotType.TANK;
 	float stride, body;
 	MapLocation enemylocation;
 	MapLocation here;
@@ -22,7 +22,7 @@ public class Soldier {
 
 	MapLocation[] previousLoc;
 	
-	public Soldier(RobotController rc){
+	public Tank(RobotController rc){
 		this.rc = rc;
 		enemylocation = new MapLocation(22, 500);
 		stride = type.strideRadius;
@@ -49,8 +49,8 @@ public class Soldier {
 			shooting = null;
 			uploadEnemy = false;
 			moveTowards();
-			if(shooting != null && rc.canFireTriadShot() && !allyBetween()){
-				rc.fireTriadShot(rc.getLocation().directionTo(shooting));
+			if(shooting != null && rc.canFirePentadShot() && !allyBetween()){
+				rc.firePentadShot(rc.getLocation().directionTo(shooting));
 			}
 			if(uploadEnemy){
 				BroadcastSystem.sendEnemyLocation(rc, enemylocation, generalThreat, generalID);
@@ -59,10 +59,6 @@ public class Soldier {
 					BroadcastSystem.sendInRange(rc);
 				}
 			}
-			if(checkStuck()){
-				shootAtTree();
-			}
-			BroadcastSystem.countSoldier(rc);
 			Clock.yield();
 		}catch(Exception e){
 			System.out.println("[ERROR] Turn could not happen");
@@ -100,7 +96,7 @@ public class Soldier {
 		float c = here.distanceTo(ri.location);
 		float d = (float)Math.sqrt((a*a+b*b-c*c)/2);
 		float beta = (float) (Math.PI-Math.asin(d/a)) * PlayerConstants.KITE_MULTIPLIER;
-		general = general.rotateRightRads((float) (Math.PI+beta));
+		general.rotateRightRads((float) (Math.PI+beta));
 	}
 	
 	public Slice[] detectAllies(){
@@ -128,6 +124,20 @@ public class Soldier {
 		
 		unavailable = Slice.simplify(unavailable);
 		return unavailable;
+	}
+	
+	public void shakeTrees(){
+		TreeInfo[] ti = rc.senseNearbyTrees();
+		for(int i = 0; i<ti.length; i++){
+			if(rc.canShake(ti[i].ID)){
+				try{
+					rc.shake(ti[i].ID);
+					break;
+				}catch(Exception e){
+					System.out.println("[ERROR] Could Not Shake");
+				}
+			}
+		}
 	}
 	
 	public Slice[] evadeObstacles(){
@@ -177,12 +187,12 @@ public class Soldier {
 						}
 					}
 					if(targThreat>generalThreat){
+						newGeneral(ri[i]);
 						enemylocation = ri[i].location;
 						generalID = ri[i].ID;
 						generalThreat = targThreat;
 						uploadEnemy = true;
 					}
-					newGeneral(ri[i]);
 				}
 			}
 			if(here.distanceTo(ri[i].location) > ri[i].getRadius()+stride+body){
@@ -212,12 +222,13 @@ public class Soldier {
 	public Slice[] evadeTrees(){
 		Slice[] unavailable = null;
 		for(int i = 0; i<ti.length; i++){
+			if(ti[i].getTeam()!=rc.getTeam())continue;
 			if(here.distanceTo(ti[i].location) > ti[i].radius+stride+body){
 				continue;
 			}
 			float half = (float) Math.asin((ti[i].radius+body)/here.distanceTo(ti[i].location));
 			float middle = here.directionTo(ti[i].location).radians;
-			Slice cone = new Slice(new Direction(middle+half+PlayerConstants.SOLDIER_EVADE_TREE), new Direction(middle-half-PlayerConstants.SOLDIER_EVADE_TREE));
+			Slice cone = new Slice(new Direction(middle+half), new Direction(middle-half));
 			if(unavailable == null){
 				unavailable = new Slice[1];
 				unavailable[0] = cone;
@@ -248,22 +259,6 @@ public class Soldier {
 		previousLoc[previousLoc.length-1] = here;
 		total++;
 		return total >= PlayerConstants.CHECK_STUCK_NUM;
-	}
-	
-	public void shootAtTree(){
-		for(int i = 0; i<ti.length; i++){
-			if(ti[i].getTeam() != rc.getTeam()){
-				target = ti[i];
-				shooting = ti[i].location;
-				if(shooting != null && rc.canFireSingleShot() && !allyBetween()){
-					try {
-						rc.fireSingleShot(rc.getLocation().directionTo(shooting));
-					} catch (GameActionException e) {
-						System.out.println("[ERROR] Can't Shoot There");
-					}
-				}
-			}
-		}
 	}
 	
 	public boolean allyBetween(){

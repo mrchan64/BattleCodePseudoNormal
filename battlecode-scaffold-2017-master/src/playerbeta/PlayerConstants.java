@@ -12,13 +12,18 @@ public class PlayerConstants {
 	public static final int NEED_LUMBERJACKS_TURN = 500;
 	public static final int NEED_SCOUTS_TURN = 750;
 	public static final int BUILD_TANKS_TURN = 1500;
+	public static final int START_DONATING_NUM = 10;
+	public static final int MAX_BUILD_IN_DISTRESS = 1;
 
 	public static final float BERTH = .06141592654F;
 	public static final float KITE_MULTIPLIER = .8F;
 	public static final float DIST_GARDENER = 8F;
 	public static final float DIST_ARCHON = 7F;
-	public static final float PLANT_RADIUS = .521F;
+	public static final float PLANT_RADIUS = 0F;//.521F;
 	public static final float PLANT_MARGIN = 3.01F;
+	public static final float SOLDIER_EVADE_TREE = 0.001F;
+	public static final float TREE_DENSITY_PERCENT = .18F;
+	public static final float CLOSE_RANGE_MARGIN = 10F;
 	
 	public static final int PREVIOUS_LOC_NUM = 5;
 	public static final int CHECK_STUCK_NUM = 3;

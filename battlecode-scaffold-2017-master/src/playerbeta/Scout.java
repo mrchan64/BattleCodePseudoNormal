@@ -93,20 +93,11 @@ public class Scout {
 	}
 	
 	public void moveTowards(){
-		Slice[] avoid;
-		if(efficient){
-			avoid = Slice.combine(evadeBullets_efficient(), evadeObstacles());
-		}else{
-			avoid = Slice.combine(evadeBullets(), evadeObstacles());
-		}
-		for(int i = 0; i<avoid.length; i++){
-			for(int j = i+1; j<avoid.length; j++){
-				if(avoid[i].add(avoid[j])){
-					avoid = remove(avoid, j);
-					j = i;
-				}
-			}
-		}
+		Slice[] avoid = Slice.combine(evadeBullets_efficient(), evadeObstacles());
+		
+		shakeTrees();
+
+		avoid = Slice.simplify(avoid);
 		if(avoid.length>0 && avoid[0].complete){
 			return;
 		}
@@ -137,7 +128,7 @@ public class Scout {
 		float c = here.distanceTo(ri.location);
 		float d = (float)Math.sqrt((a*a+b*b-c*c)/2);
 		float beta = (float) (Math.PI-Math.asin(d/a)) * PlayerConstants.KITE_MULTIPLIER;
-		general.rotateRightRads((float) (Math.PI+beta));
+		general = general.rotateRightRads((float) (Math.PI+beta));
 	}
 	
 	public boolean allyBetween(){
@@ -153,13 +144,21 @@ public class Scout {
 	
 	public void shakeTrees(){
 		TreeInfo[] ti = rc.senseNearbyTrees();
+		float distance = Float.MAX_VALUE;
 		for(int i = 0; i<ti.length; i++){
-			if(rc.canShake(ti[i].ID)){
-				try{
-					rc.shake(ti[i].ID);
-					break;
-				}catch(Exception e){
-					System.out.println("[ERROR] Could Not Shake");
+			if(ti[i].getContainedBullets()>0){
+				if(rc.canShake(ti[i].ID)){
+					try{
+						rc.shake(ti[i].ID);
+						return;
+					}catch(Exception e){
+						System.out.println("[ERROR] Could Not Shake");
+					}
+				}else{
+					if(here.distanceTo(ti[i].location)<distance){
+						general = here.directionTo(ti[i].location);
+						distance = here.distanceTo(ti[i].location);
+					}
 				}
 			}
 		}
@@ -243,115 +242,8 @@ public class Scout {
 			}
 		}
 		if(unavailable == null)unavailable = new Slice[0];
-		
-		for(int i = 0; i<unavailable.length; i++){
-			for(int j = i+1; j<unavailable.length; j++){
-				if(unavailable[i].add(unavailable[j])){
-					unavailable = remove(unavailable, j);
-					j = i;
-				}
-			}
-		}
-		return unavailable;
-	}
-	
-	public Slice[] evadeBullets(){
-		Slice[] unavailable = null;
-		
-		BulletInfo[] bi = rc.senseNearbyBullets();
-		
-		MapLocation origin = new MapLocation(0,0);
-		MapLocation point = new MapLocation(stride,body);
-		
-		float beta = origin.directionTo(point).radians+PlayerConstants.BERTH;
-		float oa = origin.distanceTo(point);
-		
-		for(int i = 0; i<bi.length; i++){
-			MapLocation endpoint1 = bi[i].getLocation();
-			Direction dir = bi[i].getDir();
-			float speed = bi[i].getSpeed();
-			MapLocation endpoint2 = endpoint1.add(dir,speed);
-			
-			Line bulletPath = new Line(endpoint1, dir);
-			Line altitude = new Line(here, new Direction((float) (dir.radians + Math.PI/2)));
-			
-			MapLocation altitudeIntersect = bulletPath.intersect(altitude);
-			float altitudeLength = here.distanceTo(altitudeIntersect);
-			if(altitudeLength == 0){
-				continue;
-			}
-			if(altitudeLength > stride + body){
-				continue;
-			}
-			Direction altitudeAngle = here.directionTo(altitudeIntersect);
-			
-			float theta1, theta2;
-			
-			if(here.distanceTo(endpoint1) > oa){
-				if(altitudeAngle
-						.radiansBetween(here
-								.directionTo(endpoint1))>0){
-					theta1 = altitudeAngle.radians + acos(altitudeLength, oa);
-				}else{
-					theta1 = altitudeAngle.radians - acos(altitudeLength, oa);
-				}
-			}else{
-				float hypotenuse = here.distanceTo(endpoint1);
-				if(altitudeAngle.radiansBetween(here.directionTo(endpoint1))>0){
-					theta1 = altitudeAngle.radians + acos(altitudeLength, hypotenuse);
-				}else{
-					theta1 = altitudeAngle.radians - acos(altitudeLength, hypotenuse);
-				}
-			}
-			
-			if(here.distanceTo(endpoint2) > oa){
-				if(altitudeAngle.radiansBetween(here.directionTo(endpoint2))>0){
-					theta2 = altitudeAngle.radians + acos(altitudeLength, oa);
-				}else{
-					theta2 = altitudeAngle.radians - acos(altitudeLength, oa);
-				}
-			}else{
-				float hypotenuse = here.distanceTo(endpoint2);
-				if(altitudeAngle.radiansBetween(here.directionTo(endpoint2))>0){
-					theta2 = altitudeAngle.radians + acos(altitudeLength, hypotenuse);
-				}else{
-					theta2 = altitudeAngle.radians - acos(altitudeLength, hypotenuse);
-				}
-			}
-			
-			Direction open, close;
-			
-			if((new Direction(theta1)).radiansBetween(new Direction(theta2))>0){
-				open = new Direction(theta2 + beta);
-				close = new Direction(theta1 - beta);
-			}else{
-				close = new Direction(theta2 - beta);
-				open = new Direction(theta1 + beta);
-			}
-			
-			if(unavailable == null){
-				unavailable = new Slice[1];
-				unavailable[0] = new Slice(open,close);
-			}else{
-				Slice[] newSet = new Slice[unavailable.length+1];
-				for(int j = 0; j<unavailable.length; j++){
-					newSet[j+1] = unavailable[j];
-				}
-				newSet[0] = new Slice(open, close);
-				unavailable = newSet;
-			}
-		}
-		if(unavailable == null)unavailable = new Slice[0];
-		
-		for(int i = 0; i<unavailable.length; i++){
-			for(int j = i+1; j<unavailable.length; j++){
-				if(unavailable[i].add(unavailable[j])){
-					unavailable = remove(unavailable, j);
-					j = i;
-				}
-			}
-		}
-		
+
+		unavailable = Slice.simplify(unavailable);
 		return unavailable;
 	}
 	
@@ -410,46 +302,9 @@ public class Scout {
 		}
 		if(unavailable == null)unavailable = new Slice[0];
 		
-		for(int i = 0; i<unavailable.length; i++){
-			for(int j = i+1; j<unavailable.length; j++){
-				if(unavailable[i].add(unavailable[j])){
-					unavailable = remove(unavailable, j);
-					j = i;
-				}
-			}
-		}
+		unavailable = Slice.simplify(unavailable);
 		
 		return unavailable;
 		
-	}
-	
-	public Slice[] remove(Slice[] arg, int index){
-		Slice[] newArg = new Slice[arg.length - 1];
-		for(int i = 0; i<index; i++){
-			newArg[i] = arg[i];
-		}
-		for(int i = index; i<newArg.length; i++){
-			newArg[i] = arg[i+1];
-		}
-		return newArg;
-	}
-	
-	public static void hypotenuse(float a, float b){
-		MapLocation origin = new MapLocation(0,0);
-		MapLocation point = new MapLocation(a,b);
-		System.out.println(origin.distanceTo(point));
-		System.out.println(origin.directionTo(point).radians);
-	}
-	
-	public float acos(float adjacent, float hypotenuse){
-		float opposite = (float)Math.sqrt(hypotenuse*hypotenuse - adjacent*adjacent);
-		Direction alpha = new MapLocation(0, 0).directionTo(new MapLocation(adjacent, opposite));
-		return alpha.radians;
-	}
-	
-	public float asin(float opposite, float hypotenuse){
-		float adjacent = (float)Math.sqrt(hypotenuse*hypotenuse - opposite*opposite);
-		Direction alpha = new MapLocation(0, 0).directionTo(new MapLocation(adjacent, opposite));
-		return alpha.radians;
 	}
 }

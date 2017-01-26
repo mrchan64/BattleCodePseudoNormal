@@ -22,9 +22,15 @@ public class RobotPlayer {
         case LUMBERJACK:
         	Lumberjack lumberjack = new Lumberjack(rc);
         	lumberjack.go();
+        	break;
         case SOLDIER:
         	Soldier soldier = new Soldier(rc);
         	soldier.go();
+        	break;
+        case TANK:
+        	Tank tank = new Tank(rc);
+        	tank.go();
+        	break;
 		}
 	}
 }

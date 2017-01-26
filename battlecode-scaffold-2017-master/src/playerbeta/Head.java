@@ -29,9 +29,19 @@ public class Head {
 	}
 	
 	public void cashIn(){
+		int numFarmers = BroadcastSystem.checkFarmers(rc)[0];
 		if(rc.getTeamBullets()>1000){
 			try {
 				rc.donate(rc.getTeamBullets()-1000);
+			} catch (GameActionException e) {
+				System.out.println("[Error] Couldn't donate");
+			}
+		}
+		if(numFarmers < PlayerConstants.START_DONATING_NUM)return;
+		float bulletsPerPoint = (float) (7.5+rc.getRoundNum()*12.5/3000);
+		if(rc.getTeamBullets()>bulletsPerPoint){
+			try {
+				rc.donate(bulletsPerPoint);
 			} catch (GameActionException e) {
 				System.out.println("[Error] Couldn't donate");
 			}

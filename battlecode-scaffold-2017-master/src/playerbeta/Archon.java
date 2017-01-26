@@ -13,12 +13,17 @@ public class Archon {
 	float plantMargin = 1F;
 	float wallMargin = 1.233F;
 	MapLocation relativeSafety;
+	MapLocation enemyLocation;
 	MapLocation here;
 	RobotInfo[] ri;
+	TreeInfo[] ti;
 	Direction buildDir;
 	int numFarmers = 0;
 	int numOnHold = 0;
 	int buildingCounter = 1;
+	Direction general;
+	boolean moveAway = false;
+	int builtInDistress = 0;
 	
 	public Archon(RobotController rc){
 		this.rc = rc;
@@ -39,6 +44,7 @@ public class Archon {
 		try{
 			here = rc.getLocation();
 			ri = rc.senseNearbyRobots();
+			ti = rc.senseNearbyTrees();
 			int[] arr = BroadcastSystem.checkFarmers(rc);
 			numFarmers = arr[0];
 			numOnHold = arr[1];
@@ -50,6 +56,7 @@ public class Archon {
 			head.runHead();
 			attemptBuild();
 			checkBuilding();
+			moveAway();
 			Clock.yield();
 		}catch(Exception e){
 			System.out.println("[ERROR] Turn could not happen");
@@ -66,7 +73,7 @@ public class Archon {
 			ally = rc.getInitialArchonLocations(Team.B);
 			enemy = rc.getInitialArchonLocations(Team.A);
 		}
-		MapLocation enemyLocation = getCenter(enemy);
+		enemyLocation = getCenter(enemy);
 		MapLocation allyLocation = getCenter(ally);
 		relativeSafety = enemyLocation.add(enemyLocation.directionTo(allyLocation), enemyLocation.distanceTo(allyLocation)*safetyMultiplier);
 		System.out.println("rs "+relativeSafety);
@@ -89,11 +96,13 @@ public class Archon {
 	
 	public void attemptBuild(){
 		
-		if(!rc.isBuildReady() || rc.getTeamBullets() < RobotType.GARDENER.bulletCost + numFarmers * PlayerConstants.BULLET_RESERVE_PER_GARDENER)return;
+		if(moveAway && builtInDistress>=PlayerConstants.MAX_BUILD_IN_DISTRESS)return;
 		
-		if(rc.getRoundNum() < PlayerConstants.LIMIT_GARDENER_TURN && numOnHold >= PlayerConstants.MAX_ON_HOLD )return;
+		if(!rc.isBuildReady() || rc.getTeamBullets() </* RobotType.GARDENER.bulletCost + */numFarmers * PlayerConstants.BULLET_RESERVE_PER_GARDENER)return;
 		
-		Direction buildDir = here.directionTo(relativeSafety);
+		if(/*rc.getRoundNum() < PlayerConstants.LIMIT_GARDENER_TURN &&*/ numOnHold >= PlayerConstants.MAX_ON_HOLD )return;
+		
+		Direction buildDir = here.directionTo(enemyLocation);
 		Slice[] avoid = Slice.combine(detectObstacles(), detectTrees());
 		
 		avoid = detectWallDir(avoid);
@@ -113,7 +122,11 @@ public class Archon {
 			try{
 				rc.buildRobot(RobotType.GARDENER, buildDir);
 				buildingCounter = 3;
-				System.out.println("Build");
+				if(moveAway){
+					builtInDistress++;
+				}else{
+					builtInDistress = 0;
+				}
 			}catch(Exception e){
 				System.out.println("Can't build gardener there");
 			}
@@ -331,5 +344,107 @@ public class Archon {
 			BroadcastSystem.archonBuilding(rc);
 		}
 		buildingCounter--;
+	}
+	
+	public void moveAway(){
+		MapLocation moveVect = new MapLocation(0,0);
+		for(int i = 0; i<ri.length; i++){
+			if(ri[i].getTeam() != rc.getTeam())continue;
+			float vectMag = 0;
+			Direction vectRad = new Direction(0);
+			if(ri[i].type == RobotType.GARDENER && here.distanceTo(ri[i].location) < PlayerConstants.DIST_GARDENER){
+				vectMag = PlayerConstants.DIST_GARDENER - here.distanceTo(ri[i].location);
+				vectRad = ri[i].location.directionTo(here);
+			}else if(ri[i].type == RobotType.ARCHON && here.distanceTo(ri[i].location) < PlayerConstants.DIST_ARCHON){
+				vectMag = PlayerConstants.DIST_ARCHON - here.distanceTo(ri[i].location);
+				vectRad = ri[i].location.directionTo(here);
+			}
+			moveVect = moveVect.add(vectRad, vectMag);
+		}
+		if(moveVect.x == 0 && moveVect.y == 0){
+			moveAway = false;
+			return;
+		}
+		general = new MapLocation(0,0).directionTo(moveVect);
+		moveAway = true;
+		moveTowards();
+	}
+	
+	public void moveTowards(){
+		Slice[] avoid = Slice.combine(evadeObstacles(), evadeTrees());
+		if(avoid.length>0 && avoid[0].complete){
+			return;
+		}
+		
+		avoid = detectWallDir(avoid);
+
+		for(int i = 0; i<avoid.length; i++){
+			if(avoid[i].contains(general)){
+				general = avoid[i].round(general);
+				break;
+			}
+		}
+		
+		try{
+			if(rc.canMove(general)){
+				rc.move(general);
+			}
+		}catch(Exception e){
+			System.out.println("[ERROR] Tried to move");
+		}
+	}
+	
+	public Slice[] evadeObstacles(){
+		Slice[] unavailable = null;
+		for(int i = 0; i<ri.length; i++){
+			if(here.distanceTo(ri[i].location) > ri[i].getRadius()+stride+body){
+				continue;
+			}
+			float half = (float) Math.asin((ri[i].getRadius()+body)/here.distanceTo(ri[i].location));
+			float middle = here.directionTo(ri[i].location).radians;
+			Slice cone = new Slice(new Direction(middle+half), new Direction(middle-half));
+			if(unavailable == null){
+				unavailable = new Slice[1];
+				unavailable[0] = cone;
+			}else{
+				Slice[] newSet = new Slice[unavailable.length+1];
+				for(int j = 0; j<unavailable.length; j++){
+					newSet[j+1] = unavailable[j];
+				}
+				newSet[0] = cone;
+				unavailable = newSet;
+			}
+		}
+		if(unavailable == null)unavailable = new Slice[0];
+		
+		unavailable = Slice.simplify(unavailable);
+		return unavailable;
+	}
+	
+	public Slice[] evadeTrees(){
+		Slice[] unavailable = null;
+		for(int i = 0; i<ti.length; i++){
+			if(here.distanceTo(ti[i].location) > ti[i].radius+stride+body){
+				continue;
+			}
+			float half = (float) Math.asin((ti[i].radius+body)/here.distanceTo(ti[i].location));
+			float middle = here.directionTo(ti[i].location).radians;
+			Slice cone = new Slice(new Direction(middle+half), new Direction(middle-half));
+			if(unavailable == null){
+				unavailable = new Slice[1];
+				unavailable[0] = cone;
+			}else{
+				Slice[] newSet = new Slice[unavailable.length+1];
+				for(int j = 0; j<unavailable.length; j++){
+					newSet[j+1] = unavailable[j];
+				}
+				newSet[0] = cone;
+				unavailable = newSet;
+			}
+		}
+		if(unavailable == null)unavailable = new Slice[0];
+		
+		unavailable = Slice.simplify(unavailable);
+		return unavailable;
 	}
 }
